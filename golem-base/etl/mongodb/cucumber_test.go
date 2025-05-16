@@ -159,8 +159,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the owner address should be stored in the Mongodb database$`, theOwnerAddressShouldBeStoredInTheMongodbDatabase)
 	ctx.Step(`^the owner address should be preserved in the Mongodb database$`, theOwnerAddressShouldBePreservedInTheMongodbDatabase)
 	ctx.Step(`^a new entity in Golebase$`, aNewEntityInGolebase)
-	ctx.Step(`^update the TTL of the entity in Golembase$`, updateTheTTLOfTheEntityInGolembase)
-	ctx.Step(`^the TTL of the entity should be extended in the Mongodb database$`, theTTLOfTheEntityShouldBeExtendedInTheMongodbDatabase)
+	ctx.Step(`^update the BTL of the entity in Golembase$`, updateTheBTLOfTheEntityInGolembase)
+	ctx.Step(`^the BTL of the entity should be extended in the Mongodb database$`, theBTLOfTheEntityShouldBeExtendedInTheMongodbDatabase)
 }
 
 func aRunningETLToMongodb() error {
@@ -611,21 +611,21 @@ func aNewEntityInGolebase(ctx context.Context) error {
 
 }
 
-func updateTheTTLOfTheEntityInGolembase(ctx context.Context) error {
+func updateTheBTLOfTheEntityInGolembase(ctx context.Context) error {
 	w := etlworld.GetWorld(ctx)
 
-	_, err := w.ExtendTTL(ctx, w.CreatedEntityKey, 500) // Extend by 500 blocks
+	_, err := w.ExtendBTL(ctx, w.CreatedEntityKey, 500) // Extend by 500 blocks
 	if err != nil {
-		return fmt.Errorf("failed to extend TTL: %w", err)
+		return fmt.Errorf("failed to extend BTL: %w", err)
 	}
 	return nil
 }
 
-func theTTLOfTheEntityShouldBeExtendedInTheMongodbDatabase(ctx context.Context) error {
+func theBTLOfTheEntityShouldBeExtendedInTheMongodbDatabase(ctx context.Context) error {
 	w := etlworld.GetWorld(ctx)
 	entityKey := w.CreatedEntityKey
 
-	expectedExpiresAt := w.InitialExpiresAtBlock + w.TTLExtendedBy
+	expectedExpiresAt := w.InitialExpiresAtBlock + w.BTLExtendedBy
 
 	return w.AccessMongodb(func(mongo *mongogolem.MongoGolem) error {
 		timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Second)

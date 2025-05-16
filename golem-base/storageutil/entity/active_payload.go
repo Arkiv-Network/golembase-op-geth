@@ -6,7 +6,7 @@ import "github.com/ethereum/go-ethereum/common"
 
 // EntityMetaData represents information about an entity that is currently active in the storage layer.
 // This is what stored in the state.
-// It contains a TTL (number of blocks) and a list of annotations.
+// It contains a BTL (number of blocks) and a list of annotations.
 // The Key of the entity is derived from the payload content and the transaction hash where the entity was created.
 
 type EntityMetaData struct {

@@ -5,10 +5,10 @@ Golem Base provides a robust storage layer with the following characteristics:
 - **Transaction-Based Storage Mutations**: All changes to storage are executed through secure transaction submissions
 - **RLP-Encoded Operations**: Each transaction contains a list of operations encoded using RLP (Recursive Length Prefix) for efficient data serialization
 - **Core Operation Types**:
-  - CREATE: Establish new storage entries with configurable time-to-live (TTL)
+  - CREATE: Establish new storage entries with configurable block-to-live (BTL)
   - UPDATE: Modify existing storage entries, including payload and annotations
   - DELETE: Remove storage entries completely from the system
-- **Automatic Expiration**: Each block includes a housekeeping transaction that automatically removes all entities that have reached their expiration time, ensuring storage efficiency
+- **Automatic Expiration**: Each block includes a housekeeping transaction that automatically removes all entities that have reached their expiration block, ensuring storage efficiency
 
 ## Format of the Storage transaction
 
@@ -20,23 +20,23 @@ Such a transaction is processed by the Golem Base subsystem to execute the stora
 The transaction data field contains a StorageTransaction structure encoded using RLP. This structure consists of:
 
 - `Create`: A list of Create operations, each containing:
-  - `TTL`: Time-to-live in blocks, current block time of Optimism is 2 seconds.
+  - `BTL`: Blocks-to-live in blocks, current block time of Optimism is 2 seconds.
   - `Payload`: The actual data to be stored
   - `StringAnnotations`: Key-value pairs with string values for indexing
   - `NumericAnnotations`: Key-value pairs with numeric values for indexing
 
 - `Update`: A list of Update operations, each containing:
   - `EntityKey`: The key of the entity to update
-  - `TTL`: New time-to-live in blocks
+  - `BTL`: New blocks-to-live in blocks
   - `Payload`: New data to replace existing payload
   - `StringAnnotations`: New string annotations
   - `NumericAnnotations`: New numeric annotations
 
 - `Delete`: A list of entity keys (common.Hash) to be removed from storage
 
-- `Extend`: A list of ExtendTTL operations, each containing:
-  - `EntityKey`: The key of the entity to extend TTL for
-  - `NumberOfBlocks`: Number of blocks to extend the TTL by
+- `Extend`: A list of ExtendBTL operations, each containing:
+  - `EntityKey`: The key of the entity to extend BTL for
+  - `NumberOfBlocks`: Number of blocks to extend the BTL by
 
 The transaction is atomic - all operations succeed or the entire transaction fails. Entity keys for Create operations are derived from the transaction hash, payload content, and operation index, making it unique across the whole blockchain. Annotations enable efficient querying of stored data through specialized indexes.
 
@@ -62,10 +62,10 @@ When storage transactions are executed, the system emits logs to track entity li
   - Topics: `[GolemBaseStorageEntityDeleted, entityKey]`
   - Data: Empty
 
-- **GolemBaseStorageEntityTTLExtended**: Emitted when an entity's TTL is extended
-  - Event signature: `GolemBaseStorageEntityTTLExtended(bytes32 entityKey, uint256 oldExpirationBlock, uint256 newExpirationBlock)`
-  - Event topic: `0x49f78ff301f2020db26cdf781a7e801d1015e0b851fe4117c7740837ed6724e9`
-  - Topics: `[GolemBaseStorageEntityTTLExtended, entityKey]`
+- **GolemBaseStorageEntityBTLExtended**: Emitted when an entity's BTL is extended
+  - Event signature: `GolemBaseStorageEntityBTLExtended(bytes32 entityKey, uint256 oldExpirationBlock, uint256 newExpirationBlock)`
+  - Event topic: `0x59e1f1f7ff9674612ab2457a6a68a8edd1360241e739f09fae1082ea4498f230`
+  - Topics: `[GolemBaseStorageEntityBTLExtended, entityKey]`
   - Data: Contains both the old and new expiration block numbers
 
 These logs enable efficient tracking of storage changes and can be used by applications to monitor entity lifecycle events. The event signatures are defined as keccak256 hashes of their respective function signatures.
@@ -74,7 +74,7 @@ These logs enable efficient tracking of storage changes and can be used by appli
 
 The Golem Base system includes an automatic housekeeping mechanism that runs during block processing to manage entity lifecycle. This process:
 
-1. **Expires Entities**: At each block, the system identifies and removes entities whose TTL has expired
+1. **Expires Entities**: At each block, the system identifies and removes entities whose BTL has expired
 2. **Cleans Up Indexes**: When entities are deleted, their annotation indexes are automatically updated
 3. **Emits Deletion Logs**: For each expired entity, a `GolemBaseStorageEntityDeleted` event is emitted
 
@@ -87,7 +87,7 @@ The implementation uses a specialized index that tracks which entities expire at
 The API methods are accessible through the following JSON-RPC endpoints:
 
 - `golembase_getStorageValue`: Retrieves payload data for a given hash key
-- `golembase_getEntityMetaData`: Retrieves the complete entity data including payload, TTL, and annotations for a given hash key
+- `golembase_getEntityMetaData`: Retrieves the complete entity data including payload, BTL, and annotations for a given hash key
 - `golembase_getEntitiesToExpireAtBlock`: Returns entities scheduled to expire at a specific block
 - `golembase_getEntitiesForStringAnnotationValue`: Finds entities with matching string annotations
 - `golembase_getEntitiesForNumericAnnotationValue`: Finds entities with matching numeric annotations
@@ -102,7 +102,7 @@ This JSON-RPC API provides several capabilities:
 
 1. **Storage Access**
    - `getStorageValue`: Retrieves payload data for a given hash key
-   - `getEntityMetaData`: Retrieves complete entity data including payload, TTL, owner Ethereum address and annotations
+   - `getEntityMetaData`: Retrieves complete entity data including payload, BTL, owner Ethereum address and annotations
 
 2. **Entity Queries**
    - `getEntitiesToExpireAtBlock`: Returns entities scheduled to expire at a specific block
@@ -198,7 +198,7 @@ go run ./cmd/golembase entity create
 ```
 
 This will:
-1. Create an entity with default data ("this is a test") and TTL (100 blocks)
+1. Create an entity with default data ("this is a test") and BTL (100 blocks)
 2. Sign and submit a transaction to the node
 3. Wait for the transaction to be mined
 4. Display the entity key when successful
@@ -206,7 +206,7 @@ This will:
 Optional flags:
 - `--node-url`: Specify a different node URL
 - `--data`: Custom payload data for the entity
-- `--ttl`: Custom time-to-live value in blocks
+- `--btl`: Custom time-to-live value in blocks
 
 The entity will be stored with:
 - Your specified payload

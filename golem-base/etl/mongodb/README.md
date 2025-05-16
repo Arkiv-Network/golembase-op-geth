@@ -8,7 +8,7 @@ This program implements an Extract, Transform, Load (ETL) process that processes
 - Stores entity data and annotations in MongoDB
 - Supports numeric and string annotations for entities
 - Handles entity lifecycle operations (create, update, delete)
-- Supports TTL extension operations for entities
+- Supports BTL extension operations for entities
 - Maintains processing status to track progress
 
 ## Requirements
@@ -91,7 +91,7 @@ Entity documents in MongoDB include:
 
 The following indexes are created for efficient querying:
 - `owner_address`: Index on the owner's Ethereum address
-- `expires_at`: Index for TTL queries
+- `expires_at`: Index for BTL queries
 - `stringAnnotations.$**`: Wildcard index for string annotation queries
 - `numericAnnotations.$**`: Wildcard index for numeric annotation queries
 
@@ -102,20 +102,20 @@ The following indexes are created for efficient querying:
 3. If no status exists, initializes with genesis block
 4. Processes WAL files sequentially
 5. For each block:
-   - Processes all operations (create, update, delete, extend TTL)
+   - Processes all operations (create, update, delete, extend BTL)
    - Handles entity data and annotations
-   - For TTL extensions, updates the entity's expiration block number
+   - For BTL extensions, updates the entity's expiration block number
    - Updates processing status
 6. Uses MongoDB transactions to ensure data consistency
 
-## TTL Extension
+## BTL Extension
 
-The ETL supports entity Time-To-Live (TTL) extension operations:
+The ETL supports entity Blocks-To-Live (BTL) extension operations:
 
-- When an entity's TTL is extended in Golembase, the extension is recorded in the WAL
+- When an entity's BTL is extended in Golembase, the extension is recorded in the WAL
 - The ETL processes these extension operations, updating the entity's `expires_at` field
-- The original owner is preserved during TTL extension
-- TTL extension operations are processed atomically within MongoDB transactions
+- The original owner is preserved during BTL extension
+- BTL extension operations are processed atomically within MongoDB transactions
 - The ETL maintains consistency between Golembase and MongoDB for entity expiration
 
 ## Error Handling

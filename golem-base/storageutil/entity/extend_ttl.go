@@ -8,7 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entityexpiration"
 )
 
-func ExtendTTL(
+func ExtendBTL(
 	access storageutil.StateAccess,
 	entityKey common.Hash,
 	numberOfBlocks uint64) (uint64, error) {

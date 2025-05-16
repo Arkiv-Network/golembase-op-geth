@@ -26,15 +26,15 @@ var GolemBaseStorageEntityDeleted = crypto.Keccak256Hash([]byte("GolemBaseStorag
 // GolemBaseStorageEntityUpdated is the event signature for entity update logs.
 var GolemBaseStorageEntityUpdated = crypto.Keccak256Hash([]byte("GolemBaseStorageEntityUpdated(uint256,uint256)"))
 
-// GolemBaseStorageEntityTTLExtended is the event signature for extending TTL of an entity.
-var GolemBaseStorageEntityTTLExtended = crypto.Keccak256Hash([]byte("GolemBaseStorageEntityTTLExptended(uint256,uint256)"))
+// GolemBaseStorageEntityBTLExtended is the event signature for extending BTL of an entity.
+var GolemBaseStorageEntityBTLExtended = crypto.Keccak256Hash([]byte("GolemBaseStorageEntityBTLExptended(uint256,uint256)"))
 
 // StorageTransaction represents a transaction that can be applied to the storage layer.
 // It contains a list of Create operations, a list of Update operations and a list of Delete operations.
 //
 // Semantics of the transaction operations are as follows:
-//   - Create: adds new entities to the storage layer. Each entity has a TTL (number of blocks), a payload and a list of annotations. The Key of the entity is derived from the payload content, the transaction hash where the entity was created and the index of the create operation in the transaction.
-//   - Update: updates existing entities. Each entity has a key, a TTL (number of blocks), a payload and a list of annotations. If the entity does not exist, the operation fails, failing the whole transaction.
+//   - Create: adds new entities to the storage layer. Each entity has a BTL (number of blocks), a payload and a list of annotations. The Key of the entity is derived from the payload content, the transaction hash where the entity was created and the index of the create operation in the transaction.
+//   - Update: updates existing entities. Each entity has a key, a BTL (number of blocks), a payload and a list of annotations. If the entity does not exist, the operation fails, failing the whole transaction.
 //   - Delete: removes entities from the storage layer. If the entity does not exist, the operation fails, failing back the whole transaction.
 //
 // The transaction is atomic, meaning that all operations are applied or none are.
@@ -46,11 +46,11 @@ type StorageTransaction struct {
 	Create []Create      `json:"create"`
 	Update []Update      `json:"update"`
 	Delete []common.Hash `json:"delete"`
-	Extend []ExtendTTL   `json:"extend"`
+	Extend []ExtendBTL   `json:"extend"`
 }
 
 type Create struct {
-	TTL                uint64                     `json:"ttl"`
+	BTL                uint64                     `json:"btl"`
 	Payload            []byte                     `json:"payload"`
 	StringAnnotations  []entity.StringAnnotation  `json:"stringAnnotations"`
 	NumericAnnotations []entity.NumericAnnotation `json:"numericAnnotations"`
@@ -58,13 +58,13 @@ type Create struct {
 
 type Update struct {
 	EntityKey          common.Hash                `json:"entityKey"`
-	TTL                uint64                     `json:"ttl"`
+	BTL                uint64                     `json:"btl"`
 	Payload            []byte                     `json:"payload"`
 	StringAnnotations  []entity.StringAnnotation  `json:"stringAnnotations"`
 	NumericAnnotations []entity.NumericAnnotation `json:"numericAnnotations"`
 }
 
-type ExtendTTL struct {
+type ExtendBTL struct {
 	EntityKey      common.Hash `json:"entityKey"`
 	NumberOfBlocks uint64      `json:"numberOfBlocks"`
 }
@@ -115,7 +115,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 
 		ap := &entity.EntityMetaData{
 			Owner:              sender,
-			ExpiresAtBlock:     blockNumber + create.TTL,
+			ExpiresAtBlock:     blockNumber + create.BTL,
 			StringAnnotations:  create.StringAnnotations,
 			NumericAnnotations: create.NumericAnnotations,
 		}
@@ -172,7 +172,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 		}
 
 		ap := &entity.EntityMetaData{
-			ExpiresAtBlock:     blockNumber + update.TTL,
+			ExpiresAtBlock:     blockNumber + update.BTL,
 			StringAnnotations:  update.StringAnnotations,
 			NumericAnnotations: update.NumericAnnotations,
 			Owner:              oldMetaData.Owner,
@@ -198,7 +198,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 	}
 
 	for _, extend := range tx.Extend {
-		newExpiresAtBlock, err := entity.ExtendTTL(access, extend.EntityKey, extend.NumberOfBlocks)
+		newExpiresAtBlock, err := entity.ExtendBTL(access, extend.EntityKey, extend.NumberOfBlocks)
 		if err != nil {
 			return nil, err
 		}
@@ -215,7 +215,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 
 		logs = append(logs, &types.Log{
 			Address:     address.GolemBaseStorageProcessorAddress,
-			Topics:      []common.Hash{GolemBaseStorageEntityTTLExtended, extend.EntityKey},
+			Topics:      []common.Hash{GolemBaseStorageEntityBTLExtended, extend.EntityKey},
 			Data:        data,
 			BlockNumber: blockNumber,
 		})

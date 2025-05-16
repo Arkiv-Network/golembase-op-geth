@@ -17,7 +17,7 @@ import (
 func (w *World) UpdateEntity(
 	ctx context.Context,
 	key common.Hash,
-	ttl uint64,
+	btl uint64,
 	payload []byte,
 	stringAnnotations []entity.StringAnnotation,
 	numericAnnotations []entity.NumericAnnotation,
@@ -41,7 +41,7 @@ func (w *World) UpdateEntity(
 		Update: []storagetx.Update{
 			{
 				EntityKey:          key,
-				TTL:                ttl,
+				BTL:                btl,
 				Payload:            payload,
 				StringAnnotations:  stringAnnotations,
 				NumericAnnotations: numericAnnotations,

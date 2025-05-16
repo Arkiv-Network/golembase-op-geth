@@ -37,9 +37,9 @@ Feature: ETL to SQLite
     When update the entity in Golembase
     Then the owner address should be preserved in the SQLite database
 
-  Scenario: ETL TTL Extension
+  Scenario: ETL BTL Extension
     Given A running Golembase node with WAL enabled
     And A running ETL to SQLite
     And a new entity in Golebase
-    When update the TTL of the entity in Golembase
-    Then the TTL of the entity should be extended in the SQLite database
+    When update the BTL of the entity in Golembase
+    Then the BTL of the entity should be extended in the SQLite database

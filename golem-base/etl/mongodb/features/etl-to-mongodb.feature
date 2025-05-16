@@ -45,9 +45,9 @@ Feature: ETL to Mongodb
     Then the owner address should be preserved in the Mongodb database
     And the entity should be updated in the Mongodb database
 
-  Scenario: ETL TTL Extension
+  Scenario: ETL BTL Extension
     Given A running Golembase node with WAL enabled
     And A running ETL to Mongodb
     And a new entity in Golebase
-    When update the TTL of the entity in Golembase
-    Then the TTL of the entity should be extended in the Mongodb database
+    When update the BTL of the entity in Golembase
+    Then the BTL of the entity should be extended in the Mongodb database

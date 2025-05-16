@@ -25,7 +25,7 @@ type ETLWorld struct {
 	etlProcess            *etlProcess
 	dbName                string
 	InitialExpiresAtBlock uint64
-	TTLExtendedBy         uint64
+	BTLExtendedBy         uint64
 }
 
 // NewETLWorld creates a new ETL world for testing with MongoDB.
@@ -144,8 +144,8 @@ func (w *ETLWorld) GetMongoDriver() *mongogolem.MongoGolem {
 	return w.mongoDriver
 }
 
-// ExtendTTL extends the TTL of an entity in the Golembase network.
-func (w *ETLWorld) ExtendTTL(ctx context.Context, key common.Hash, numberOfBlocks uint64) (*types.Receipt, error) {
-	w.TTLExtendedBy = numberOfBlocks
-	return w.World.ExtendTTL(ctx, key, numberOfBlocks)
+// ExtendBTL extends the BTL of an entity in the Golembase network.
+func (w *ETLWorld) ExtendBTL(ctx context.Context, key common.Hash, numberOfBlocks uint64) (*types.Receipt, error) {
+	w.BTLExtendedBy = numberOfBlocks
+	return w.World.ExtendBTL(ctx, key, numberOfBlocks)
 }

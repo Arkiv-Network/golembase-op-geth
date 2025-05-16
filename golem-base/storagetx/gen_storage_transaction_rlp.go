@@ -11,7 +11,7 @@ func (obj *StorageTransaction) EncodeRLP(_w io.Writer) error {
 	_tmp1 := w.List()
 	for _, _tmp2 := range obj.Create {
 		_tmp3 := w.List()
-		w.WriteUint64(_tmp2.TTL)
+		w.WriteUint64(_tmp2.BTL)
 		w.WriteBytes(_tmp2.Payload)
 		_tmp4 := w.List()
 		for _, _tmp5 := range _tmp2.StringAnnotations {
@@ -36,7 +36,7 @@ func (obj *StorageTransaction) EncodeRLP(_w io.Writer) error {
 	for _, _tmp11 := range obj.Update {
 		_tmp12 := w.List()
 		w.WriteBytes(_tmp11.EntityKey[:])
-		w.WriteUint64(_tmp11.TTL)
+		w.WriteUint64(_tmp11.BTL)
 		w.WriteBytes(_tmp11.Payload)
 		_tmp13 := w.List()
 		for _, _tmp14 := range _tmp11.StringAnnotations {

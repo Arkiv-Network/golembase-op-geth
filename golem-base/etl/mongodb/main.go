@@ -236,12 +236,12 @@ func main() {
 								}
 
 							case op.Extend != nil:
-								log.Info("extend TTL", "entity", op.Extend.EntityKey.Hex(), "from", op.Extend.OldExpiresAt, "to", op.Extend.NewExpiresAt)
+								log.Info("extend BTL", "entity", op.Extend.EntityKey.Hex(), "from", op.Extend.OldExpiresAt, "to", op.Extend.NewExpiresAt)
 
 								// Get the existing entity
 								entity, err := mongoDriver.GetEntity(txCtx, op.Extend.EntityKey.Hex())
 								if err != nil {
-									return nil, fmt.Errorf("failed to get entity for TTL extension: %w", err)
+									return nil, fmt.Errorf("failed to get entity for BTL extension: %w", err)
 								}
 
 								// Update the entity's expiry time to the new value
@@ -250,12 +250,12 @@ func main() {
 								// Delete and reinsert with updated expiry
 								err = mongoDriver.DeleteEntity(txCtx, op.Extend.EntityKey.Hex())
 								if err != nil {
-									return nil, fmt.Errorf("failed to delete entity before TTL extension: %w", err)
+									return nil, fmt.Errorf("failed to delete entity before BTL extension: %w", err)
 								}
 
 								err = mongoDriver.InsertEntity(txCtx, entity)
 								if err != nil {
-									return nil, fmt.Errorf("failed to insert entity with extended TTL: %w", err)
+									return nil, fmt.Errorf("failed to insert entity with extended BTL: %w", err)
 								}
 							}
 

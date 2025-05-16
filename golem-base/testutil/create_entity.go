@@ -38,7 +38,7 @@ func (w *World) CreateEntity(
 	storageTx := &storagetx.StorageTransaction{
 		Create: []storagetx.Create{
 			{
-				TTL:                ttl,
+				BTL:                ttl,
 				Payload:            payload,
 				StringAnnotations:  stringAnnotations,
 				NumericAnnotations: numericAnnotations,

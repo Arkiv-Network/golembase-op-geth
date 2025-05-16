@@ -156,8 +156,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the owner address should be stored in the SQLite database$`, theOwnerAddressShouldBeStoredInTheSQLiteDatabase)
 	ctx.Step(`^the owner address should be preserved in the SQLite database$`, theOwnerAddressShouldBePreservedInTheSQLiteDatabase)
 	ctx.Step(`^a new entity in Golebase$`, aNewEntityInGolebase)
-	ctx.Step(`^update the TTL of the entity in Golembase$`, updateTheTTLOfTheEntityInGolembase)
-	ctx.Step(`^the TTL of the entity should be extended in the SQLite database$`, theTTLOfTheEntityShouldBeExtendedInTheSQLiteDatabase)
+	ctx.Step(`^update the BTL of the entity in Golembase$`, updateTheBTLOfTheEntityInGolembase)
+	ctx.Step(`^the BTL of the entity should be extended in the SQLite database$`, theBTLOfTheEntityShouldBeExtendedInTheSQLiteDatabase)
 }
 
 func aRunningETLToSQLite() error {
@@ -541,16 +541,16 @@ func aNewEntityInGolebase(ctx context.Context) error {
 	w := etlworld.GetWorld(ctx)
 	_, err := w.CreateEntity(ctx,
 		1000,
-		[]byte("test-ttl"),
+		[]byte("test-btl"),
 		[]entity.StringAnnotation{
 			{
-				Key:   "ttlTest",
-				Value: "ttlTest",
+				Key:   "btlTest",
+				Value: "btlTest",
 			},
 		},
 		[]entity.NumericAnnotation{
 			{
-				Key:   "ttlTest",
+				Key:   "btlTest",
 				Value: 1000,
 			},
 		},
@@ -562,7 +562,7 @@ func aNewEntityInGolebase(ctx context.Context) error {
 	return nil
 }
 
-func updateTheTTLOfTheEntityInGolembase(ctx context.Context) error {
+func updateTheBTLOfTheEntityInGolembase(ctx context.Context) error {
 	w := etlworld.GetWorld(ctx)
 
 	// Record the original expiry block before extension
@@ -580,16 +580,16 @@ func updateTheTTLOfTheEntityInGolembase(ctx context.Context) error {
 		return fmt.Errorf("failed to get original expiry block: %w", err)
 	}
 
-	// Extend the TTL by 500 blocks
-	_, err = w.ExtendEntityTTL(ctx, w.CreatedEntityKey, 500)
+	// Extend the BTL by 500 blocks
+	_, err = w.ExtendEntityBTL(ctx, w.CreatedEntityKey, 500)
 	if err != nil {
-		return fmt.Errorf("failed to extend entity TTL: %w", err)
+		return fmt.Errorf("failed to extend entity BTL: %w", err)
 	}
 
 	return nil
 }
 
-func theTTLOfTheEntityShouldBeExtendedInTheSQLiteDatabase(ctx context.Context) error {
+func theBTLOfTheEntityShouldBeExtendedInTheSQLiteDatabase(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
@@ -606,19 +606,19 @@ func theTTLOfTheEntityShouldBeExtendedInTheSQLiteDatabase(ctx context.Context) e
 			}
 
 			if entity.ExpiresAt <= w.OriginalExpiryBlock {
-				return fmt.Errorf("entity TTL was not extended, original: %v, current: %v",
+				return fmt.Errorf("entity BTL was not extended, original: %v, current: %v",
 					w.OriginalExpiryBlock, entity.ExpiresAt)
 			}
 
 			return nil
 		})
 		if err != nil {
-			return fmt.Errorf("failed to check entity TTL in database: %w", err)
+			return fmt.Errorf("failed to check entity BTL in database: %w", err)
 		}
 		return nil
 	}, bo)
 	if err != nil {
-		return fmt.Errorf("failed to check entity TTL in database: %w", err)
+		return fmt.Errorf("failed to check entity BTL in database: %w", err)
 	}
 
 	return nil

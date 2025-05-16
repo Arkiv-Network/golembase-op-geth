@@ -14,7 +14,7 @@ type ETLWorld struct {
 	*testutil.World
 	sqlliteETLBinaryPath string
 	etlProcess           *etlProcess
-	OriginalExpiryBlock  int64 // Store original expiry block for TTL extension tests
+	OriginalExpiryBlock  int64 // Store original expiry block for BTL extension tests
 }
 
 func NewETLWorld(
@@ -61,11 +61,11 @@ func (w *ETLWorld) Shutdown() {
 	w.World.Shutdown()
 }
 
-// ExtendEntityTTL extends the TTL of an entity by the specified number of blocks
-func (w *ETLWorld) ExtendEntityTTL(
+// ExtendEntityBTL extends the BTL of an entity by the specified number of blocks
+func (w *ETLWorld) ExtendEntityBTL(
 	ctx context.Context,
 	key common.Hash,
 	numberOfBlocks uint64,
 ) (*types.Receipt, error) {
-	return w.World.ExtendTTL(ctx, key, numberOfBlocks)
+	return w.World.ExtendBTL(ctx, key, numberOfBlocks)
 }

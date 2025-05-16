@@ -30,7 +30,7 @@ type Operation struct {
 	Create *Create      `json:"create,omitempty"`
 	Update *Update      `json:"update,omitempty"`
 	Delete *common.Hash `json:"delete,omitempty"`
-	Extend *ExtendTTL   `json:"extend,omitempty"`
+	Extend *ExtendBTL   `json:"extend,omitempty"`
 }
 
 type Create struct {
@@ -50,7 +50,7 @@ type Update struct {
 	NumericAnnotations []entity.NumericAnnotation `json:"numericAnnotations"`
 }
 
-type ExtendTTL struct {
+type ExtendBTL struct {
 	EntityKey    common.Hash `json:"entityKey"`
 	OldExpiresAt uint64      `json:"oldExpiresAt"`
 	NewExpiresAt uint64      `json:"newExpiresAt"`
@@ -166,7 +166,7 @@ func WriteLogForBlock(dir string, block *types.Block, chainID *big.Int, receipts
 					updatedLogs = append(updatedLogs, log)
 				}
 
-				if log.Topics[0] == storagetx.GolemBaseStorageEntityTTLExtended {
+				if log.Topics[0] == storagetx.GolemBaseStorageEntityBTLExtended {
 					extendedLogs = append(extendedLogs, log)
 				}
 
@@ -244,7 +244,7 @@ func WriteLogForBlock(dir string, block *types.Block, chainID *big.Int, receipts
 				newExpiresAtU256 := uint256.NewInt(0).SetBytes(log.Data[32:])
 				newExpiresAt := newExpiresAtU256.Uint64()
 
-				ex := ExtendTTL{
+				ex := ExtendBTL{
 					EntityKey:    extend.EntityKey,
 					OldExpiresAt: oldExpiresAt,
 					NewExpiresAt: newExpiresAt,

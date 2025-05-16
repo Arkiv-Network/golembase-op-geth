@@ -13,7 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-func (w *World) ExtendTTL(
+func (w *World) ExtendBTL(
 	ctx context.Context,
 	key common.Hash,
 	ttl uint64,
@@ -34,7 +34,7 @@ func (w *World) ExtendTTL(
 
 	// Create a StorageTransaction with a single Create operation
 	storageTx := &storagetx.StorageTransaction{
-		Extend: []storagetx.ExtendTTL{
+		Extend: []storagetx.ExtendBTL{
 			{
 				EntityKey:      key,
 				NumberOfBlocks: ttl,

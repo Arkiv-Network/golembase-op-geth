@@ -1,6 +1,6 @@
-Feature: Extend TTL
+Feature: Extend BTL
 
-  Scenario: Extend TTL
+  Scenario: Extend BTL
     Given I have created an entity
-    When I submit a transaction to extend TTL of the entity by 100 blocks    
-    Then the entity's TTL should be extended by 100 blocks
+    When I submit a transaction to extend BTL of the entity by 100 blocks    
+    Then the entity's BTL should be extended by 100 blocks

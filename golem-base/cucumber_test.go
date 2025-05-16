@@ -141,8 +141,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the payload of the entity should be changed$`, thePayloadOfTheEntityShouldBeChanged)
 	ctx.Step(`^I submit a transaction to update the entity, changing the annotations$`, iSubmitATransactionToUpdateTheEntityChangingTheAnnotations)
 	ctx.Step(`^the annotations of the entity should be changed$`, theAnnotationsOfTheEntityShouldBeChanged)
-	ctx.Step(`^I submit a transaction to update the entity, changing the ttl of the entity$`, iSubmitATransactionToUpdateTheEntityChangingTheTtlOfTheEntity)
-	ctx.Step(`^the ttl of the entity should be changed$`, theTtlOfTheEntityShouldBeChanged)
+	ctx.Step(`^I submit a transaction to update the entity, changing the btl of the entity$`, iSubmitATransactionToUpdateTheEntityChangingTheBtlOfTheEntity)
+	ctx.Step(`^the btl of the entity should be changed$`, theBtlOfTheEntityShouldBeChanged)
 	ctx.Step(`^submit a transaction to create an entity of (\d+)K$`, submitATransactionToCreateAnEntityOfK)
 	ctx.Step(`^the entity creation should not fail$`, theEntityCreationShouldNotFail)
 	ctx.Step(`^I search for entities with the query$`, iSearchForEntitiesWithTheQuery)
@@ -162,8 +162,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the entity should be in the list of entities of the owner$`, theEntityShouldBeInTheListOfEntitiesOfTheOwner)
 	ctx.Step(`^the sender should be the owner of the entity$`, theSenderShouldBeTheOwnerOfTheEntity)
 	ctx.Step(`^the owner should not have any entities$`, theOwnerShouldNotHaveAnyEntities)
-	ctx.Step(`^I submit a transaction to extend TTL of the entity by (\d+) blocks$`, iSubmitATransactionToExtendTTLOfTheEntityByBlocks)
-	ctx.Step(`^the entity\'s TTL should be extended by (\d+) blocks$`, theEntitysTTLShouldBeExtendedByBlocks)
+	ctx.Step(`^I submit a transaction to extend BTL of the entity by (\d+) blocks$`, iSubmitATransactionToExtendBTLOfTheEntityByBlocks)
+	ctx.Step(`^the entity\'s BTL should be extended by (\d+) blocks$`, theEntitysBTLShouldBeExtendedByBlocks)
 
 }
 
@@ -708,7 +708,7 @@ func theAnnotationsOfTheEntityShouldBeChanged(ctx context.Context) error {
 	return nil
 }
 
-func iSubmitATransactionToUpdateTheEntityChangingTheTtlOfTheEntity(ctx context.Context) error {
+func iSubmitATransactionToUpdateTheEntityChangingTheBtlOfTheEntity(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 
 	_, err := w.UpdateEntity(
@@ -737,7 +737,7 @@ func iSubmitATransactionToUpdateTheEntityChangingTheTtlOfTheEntity(ctx context.C
 	return nil
 }
 
-func theTtlOfTheEntityShouldBeChanged(ctx context.Context) error {
+func theBtlOfTheEntityShouldBeChanged(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 	receipt := w.LastReceipt
 
@@ -1202,23 +1202,23 @@ func theOwnerShouldNotHaveAnyEntities(ctx context.Context) error {
 
 }
 
-func iSubmitATransactionToExtendTTLOfTheEntityByBlocks(ctx context.Context, blockCount int) error {
+func iSubmitATransactionToExtendBTLOfTheEntityByBlocks(ctx context.Context, blockCount int) error {
 	w := testutil.GetWorld(ctx)
 
-	_, err := w.ExtendTTL(
+	_, err := w.ExtendBTL(
 		ctx,
 		w.CreatedEntityKey,
 		uint64(blockCount),
 	)
 
 	if err != nil {
-		return fmt.Errorf("failed to extend TTL: %w", err)
+		return fmt.Errorf("failed to extend BTL: %w", err)
 	}
 
 	return nil
 }
 
-func theEntitysTTLShouldBeExtendedByBlocks(ctx context.Context, numberOfBlocks int) error {
+func theEntitysBTLShouldBeExtendedByBlocks(ctx context.Context, numberOfBlocks int) error {
 	w := testutil.GetWorld(ctx)
 
 	if w.LastReceipt == nil {

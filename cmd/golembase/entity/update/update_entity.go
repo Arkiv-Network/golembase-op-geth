@@ -23,7 +23,7 @@ func Update() *cli.Command {
 		nodeURL string
 		data    string
 		key     string
-		ttl     uint64
+		btl     uint64
 	}{}
 	return &cli.Command{
 		Name:  "update",
@@ -51,11 +51,11 @@ func Update() *cli.Command {
 				Destination: &cfg.data,
 			},
 			&cli.Uint64Flag{
-				Name:        "ttl",
-				Usage:       "new ttl for the update operation",
+				Name:        "btl",
+				Usage:       "new btl for the update operation",
 				Value:       100,
-				EnvVars:     []string{"ENTITY_TTL"},
-				Destination: &cfg.ttl,
+				EnvVars:     []string{"ENTITY_BTL"},
+				Destination: &cfg.btl,
 			},
 		},
 		Action: func(c *cli.Context) error {
@@ -91,7 +91,7 @@ func Update() *cli.Command {
 				Update: []storagetx.Update{
 					{
 						EntityKey: common.HexToHash(c.String("key")),
-						TTL:       c.Uint64("ttl"),
+						BTL:       cfg.btl,
 						Payload:   []byte(c.String("data")),
 						StringAnnotations: []entity.StringAnnotation{
 							{

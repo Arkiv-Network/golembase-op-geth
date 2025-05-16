@@ -17,7 +17,7 @@ func TestStorageTransactionMarshalling(t *testing.T) {
 		tx := &storagetx.StorageTransaction{
 			Create: []storagetx.Create{
 				{
-					TTL:     100,
+					BTL:     100,
 					Payload: []byte("test payload"),
 					StringAnnotations: []entity.StringAnnotation{
 						{Key: "type", Value: "test"},
@@ -32,7 +32,7 @@ func TestStorageTransactionMarshalling(t *testing.T) {
 			Update: []storagetx.Update{
 				{
 					EntityKey: common.HexToHash("0x1234567890"),
-					TTL:       200,
+					BTL:       200,
 					Payload:   []byte("updated payload"),
 					StringAnnotations: []entity.StringAnnotation{
 						{Key: "status", Value: "updated"},
@@ -59,13 +59,13 @@ func TestStorageTransactionMarshalling(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify all fields match
-		assert.Equal(t, tx.Create[0].TTL, decoded.Create[0].TTL)
+		assert.Equal(t, tx.Create[0].BTL, decoded.Create[0].BTL)
 		assert.Equal(t, tx.Create[0].Payload, decoded.Create[0].Payload)
 		assert.Equal(t, tx.Create[0].StringAnnotations, decoded.Create[0].StringAnnotations)
 		assert.Equal(t, tx.Create[0].NumericAnnotations, decoded.Create[0].NumericAnnotations)
 
 		assert.Equal(t, tx.Update[0].EntityKey, decoded.Update[0].EntityKey)
-		assert.Equal(t, tx.Update[0].TTL, decoded.Update[0].TTL)
+		assert.Equal(t, tx.Update[0].BTL, decoded.Update[0].BTL)
 		assert.Equal(t, tx.Update[0].Payload, decoded.Update[0].Payload)
 		assert.Equal(t, tx.Update[0].StringAnnotations, decoded.Update[0].StringAnnotations)
 		assert.Equal(t, tx.Update[0].NumericAnnotations, decoded.Update[0].NumericAnnotations)
