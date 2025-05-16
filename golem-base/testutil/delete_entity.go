@@ -18,6 +18,45 @@ func (w *World) DeleteEntity(
 	key common.Hash,
 ) (*types.Receipt, error) {
 
+	receipt, err := w.deleteEntityFromAccount(
+		ctx,
+		key,
+		w.FundedAccount,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if receipt.Status == types.ReceiptStatusFailed {
+		return nil, fmt.Errorf("transaction failed")
+	}
+
+	return receipt, nil
+}
+
+func (w *World) DeleteEntityFromSecondAccount(
+	ctx context.Context,
+	key common.Hash,
+) (*types.Receipt, error) {
+
+	receipt, err := w.deleteEntityFromAccount(
+		ctx,
+		key,
+		w.SecondFundedAccount,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return receipt, nil
+}
+
+func (w *World) deleteEntityFromAccount(
+	ctx context.Context,
+	key common.Hash,
+	account *FundedAccount,
+) (*types.Receipt, error) {
+
 	client := w.GethInstance.ETHClient
 
 	chainID, err := client.ChainID(ctx)
@@ -26,7 +65,7 @@ func (w *World) DeleteEntity(
 	}
 
 	// Get the current nonce for the sender address
-	nonce, err := client.PendingNonceAt(ctx, w.FundedAccount.Address)
+	nonce, err := client.PendingNonceAt(ctx, account.Address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get nonce: %w", err)
 	}
@@ -61,7 +100,7 @@ func (w *World) DeleteEntity(
 	signer := types.LatestSignerForChainID(chainID)
 
 	// Create and sign the transaction
-	signedTx, err := types.SignNewTx(w.FundedAccount.PrivateKey, signer, txdata)
+	signedTx, err := types.SignNewTx(account.PrivateKey, signer, txdata)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign transaction: %w", err)
 	}
@@ -76,10 +115,6 @@ func (w *World) DeleteEntity(
 	receipt, err := bind.WaitMined(ctx, client, signedTx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to wait for transaction: %w", err)
-	}
-
-	if receipt.Status == types.ReceiptStatusFailed {
-		return nil, fmt.Errorf("transaction failed")
 	}
 
 	w.LastReceipt = receipt

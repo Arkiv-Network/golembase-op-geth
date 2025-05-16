@@ -23,6 +23,63 @@ func (w *World) UpdateEntity(
 	numericAnnotations []entity.NumericAnnotation,
 ) (*types.Receipt, error) {
 
+	receipt, err := w.updateEntity(
+		ctx,
+		key,
+		w.FundedAccount,
+		btl,
+		payload,
+		stringAnnotations,
+		numericAnnotations,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if receipt.Status == types.ReceiptStatusFailed {
+		return nil, fmt.Errorf("transaction failed")
+	}
+
+	return receipt, nil
+
+}
+
+func (w *World) UpdateEntityBySecondAccount(
+	ctx context.Context,
+	key common.Hash,
+	btl uint64,
+	payload []byte,
+	stringAnnotations []entity.StringAnnotation,
+	numericAnnotations []entity.NumericAnnotation,
+) (*types.Receipt, error) {
+
+	receipt, err := w.updateEntity(
+		ctx,
+		key,
+		w.SecondFundedAccount,
+		btl,
+		payload,
+		stringAnnotations,
+		numericAnnotations,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return receipt, nil
+
+}
+
+func (w *World) updateEntity(
+	ctx context.Context,
+	key common.Hash,
+	account *FundedAccount,
+	btl uint64,
+	payload []byte,
+	stringAnnotations []entity.StringAnnotation,
+	numericAnnotations []entity.NumericAnnotation,
+) (*types.Receipt, error) {
+
 	client := w.GethInstance.ETHClient
 
 	chainID, err := client.ChainID(ctx)
@@ -31,7 +88,7 @@ func (w *World) UpdateEntity(
 	}
 
 	// Get the current nonce for the sender address
-	nonce, err := client.PendingNonceAt(ctx, w.FundedAccount.Address)
+	nonce, err := client.PendingNonceAt(ctx, account.Address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get nonce: %w", err)
 	}
@@ -72,7 +129,7 @@ func (w *World) UpdateEntity(
 	signer := types.LatestSignerForChainID(chainID)
 
 	// Create and sign the transaction
-	signedTx, err := types.SignNewTx(w.FundedAccount.PrivateKey, signer, txdata)
+	signedTx, err := types.SignNewTx(account.PrivateKey, signer, txdata)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign transaction: %w", err)
 	}
@@ -87,10 +144,6 @@ func (w *World) UpdateEntity(
 	receipt, err := bind.WaitMined(ctx, client, signedTx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to wait for transaction: %w", err)
-	}
-
-	if receipt.Status == types.ReceiptStatusFailed {
-		return nil, fmt.Errorf("transaction failed")
 	}
 
 	w.LastReceipt = receipt

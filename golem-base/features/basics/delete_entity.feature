@@ -15,3 +15,8 @@ Feature: deleting entities
     And the number of entities should be 0
     And the list of all entities should be empty
     And the owner should not have any entities
+
+  Scenario: deleting entity by non-owner
+    Given I have created an entity
+    When I submit a transaction to delete the entity by non-owner
+    Then the transaction should fail

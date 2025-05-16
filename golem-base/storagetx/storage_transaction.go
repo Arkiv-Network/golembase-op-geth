@@ -153,7 +153,16 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 	}
 
 	for _, toDelete := range tx.Delete {
-		err := deleteEntity(toDelete, true)
+		metaData, err := entity.GetEntityMetaData(access, toDelete)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get entity meta data for update %s: %w", toDelete.Hex(), err)
+		}
+
+		if metaData.Owner != sender {
+			return nil, fmt.Errorf("failed to delete entity %s: %s is not the owner", toDelete.Hex(), sender.Hex())
+		}
+
+		err = deleteEntity(toDelete, true)
 		if err != nil {
 			return nil, err
 		}
@@ -164,6 +173,10 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 		oldMetaData, err := entity.GetEntityMetaData(access, update.EntityKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get entity meta data for update %s: %w", update.EntityKey.Hex(), err)
+		}
+
+		if oldMetaData.Owner != sender {
+			return nil, fmt.Errorf("failed to update entity %s: %s is not the owner", update.EntityKey.Hex(), sender.Hex())
 		}
 
 		err = deleteEntity(update.EntityKey, false)

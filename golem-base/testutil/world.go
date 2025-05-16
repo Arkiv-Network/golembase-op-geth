@@ -11,12 +11,13 @@ import (
 
 // World is the test world - it holds all the state that is shared between steps
 type World struct {
-	GethInstance     *GethInstance
-	FundedAccount    *FundedAccount
-	LastReceipt      *types.Receipt
-	SearchResult     []golemtype.SearchResult
-	CreatedEntityKey common.Hash
-	LastError        error
+	GethInstance        *GethInstance
+	FundedAccount       *FundedAccount
+	SecondFundedAccount *FundedAccount
+	LastReceipt         *types.Receipt
+	SearchResult        []golemtype.SearchResult
+	CreatedEntityKey    common.Hash
+	LastError           error
 }
 
 func NewWorld(ctx context.Context, gethPath string) (*World, error) {
@@ -30,9 +31,15 @@ func NewWorld(ctx context.Context, gethPath string) (*World, error) {
 		return nil, fmt.Errorf("failed to create account and transfer funds: %w", err)
 	}
 
+	acc2, err := geth.createAccountAndTransferFunds(ctx, EthToWei(100))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create account and transfer funds: %w", err)
+	}
+
 	return &World{
-		GethInstance:  geth,
-		FundedAccount: acc,
+		GethInstance:        geth,
+		FundedAccount:       acc,
+		SecondFundedAccount: acc2,
 	}, nil
 
 }

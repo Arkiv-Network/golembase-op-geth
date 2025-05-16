@@ -16,7 +16,7 @@ import (
 func (w *World) ExtendBTL(
 	ctx context.Context,
 	key common.Hash,
-	ttl uint64,
+	btl uint64,
 ) (*types.Receipt, error) {
 
 	client := w.GethInstance.ETHClient
@@ -37,7 +37,7 @@ func (w *World) ExtendBTL(
 		Extend: []storagetx.ExtendBTL{
 			{
 				EntityKey:      key,
-				NumberOfBlocks: ttl,
+				NumberOfBlocks: btl,
 			},
 		},
 	}

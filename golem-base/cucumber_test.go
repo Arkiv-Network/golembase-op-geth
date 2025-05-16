@@ -164,6 +164,9 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the owner should not have any entities$`, theOwnerShouldNotHaveAnyEntities)
 	ctx.Step(`^I submit a transaction to extend BTL of the entity by (\d+) blocks$`, iSubmitATransactionToExtendBTLOfTheEntityByBlocks)
 	ctx.Step(`^the entity\'s BTL should be extended by (\d+) blocks$`, theEntitysBTLShouldBeExtendedByBlocks)
+	ctx.Step(`^I submit a transaction to delete the entity by non-owner$`, iSubmitATransactionToDeleteTheEntityByNonowner)
+	ctx.Step(`^the transaction should fail$`, theTransactionShouldFail)
+	ctx.Step(`^I submit a transaction to update the entity by non-owner$`, iSubmitATransactionToUpdateTheEntityByNonowner)
 
 }
 
@@ -981,7 +984,7 @@ func theWriteaheadLogForTheCreateShouldBeCreated(ctx context.Context) error {
 			{
 				Create: &wal.Create{
 					EntityKey:      w.CreatedEntityKey,
-					ExpiresAtBlock: 102,
+					ExpiresAtBlock: 103,
 					Payload:        []byte("test payload"),
 					StringAnnotations: []entity.StringAnnotation{
 						{Key: "test_key", Value: "test_value"},
@@ -1039,7 +1042,7 @@ func theWriteaheadLogForTheUpdateShouldBeCreated(ctx context.Context) error {
 			{
 				Update: &wal.Update{
 					EntityKey:      w.CreatedEntityKey,
-					ExpiresAtBlock: 103,
+					ExpiresAtBlock: 104,
 					Payload:        []byte("new payload"),
 					StringAnnotations: []entity.StringAnnotation{
 						{Key: "test_key", Value: "test_value"},
@@ -1240,6 +1243,54 @@ func theEntitysBTLShouldBeExtendedByBlocks(ctx context.Context, numberOfBlocks i
 
 	if oldExpiresAtBlock.Uint64()+uint64(numberOfBlocks) != newExpiresAtBlock.Uint64() {
 		return fmt.Errorf("expected entity to expire at block %d, but got %d", oldExpiresAtBlock.Uint64()+uint64(numberOfBlocks), newExpiresAtBlock.Uint64())
+	}
+
+	return nil
+}
+
+func iSubmitATransactionToDeleteTheEntityByNonowner(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+
+	_, err := w.DeleteEntityFromSecondAccount(
+		ctx,
+		w.CreatedEntityKey,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to send tx to delete entity: %w", err)
+	}
+
+	return nil
+}
+
+func theTransactionShouldFail(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+
+	if w.LastReceipt == nil {
+		return fmt.Errorf("no transaction receipt found")
+	}
+
+	if w.LastReceipt.Status != types.ReceiptStatusFailed {
+		return fmt.Errorf("expected transaction to fail, but it succeeded")
+	}
+
+	return nil
+}
+
+func iSubmitATransactionToUpdateTheEntityByNonowner(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+
+	_, err := w.UpdateEntityBySecondAccount(
+		ctx,
+		w.CreatedEntityKey,
+		100,
+		[]byte("new payload"),
+		[]entity.StringAnnotation{
+			{Key: "test_key", Value: "test_value"},
+		},
+		[]entity.NumericAnnotation{},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to send tx to update entity: %w", err)
 	}
 
 	return nil

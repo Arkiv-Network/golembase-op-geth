@@ -14,3 +14,8 @@ Feature: update entity
     Given I have created an entity
     When I submit a transaction to update the entity, changing the btl of the entity
     Then the btl of the entity should be changed
+
+  Scenario: updating entity by non-owner
+    Given I have created an entity
+    When I submit a transaction to update the entity by non-owner
+    Then the transaction should fail

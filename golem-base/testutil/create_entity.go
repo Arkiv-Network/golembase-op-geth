@@ -15,7 +15,7 @@ import (
 
 func (w *World) CreateEntity(
 	ctx context.Context,
-	ttl uint64,
+	btl uint64,
 	payload []byte,
 	stringAnnotations []entity.StringAnnotation,
 	numericAnnotations []entity.NumericAnnotation,
@@ -38,7 +38,7 @@ func (w *World) CreateEntity(
 	storageTx := &storagetx.StorageTransaction{
 		Create: []storagetx.Create{
 			{
-				BTL:                ttl,
+				BTL:                btl,
 				Payload:            payload,
 				StringAnnotations:  stringAnnotations,
 				NumericAnnotations: numericAnnotations,
