@@ -44,8 +44,8 @@ jobs:
             if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
               docker buildx build \
                 --platform linux/amd64 \
-                --tag quay.io/golemnetwork/gb-op-geth:$SHORT_COMMIT-amd64 \
-                --tag quay.io/golemnetwork/gb-op-geth:latest-amd64 \
+                --tag golemnetwork/golembase-op-geth:$SHORT_COMMIT-amd64 \
+                --tag golemnetwork/golembase-op-geth:latest-amd64 \
                 --push \
                 .
             fi
@@ -55,8 +55,8 @@ jobs:
               TAG=${GITHUB_REF#refs/tags/}
               docker buildx build \
                 --platform linux/amd64 \
-                --tag quay.io/golemnetwork/gb-op-geth:$SHORT_COMMIT-amd64 \
-                --tag quay.io/golemnetwork/gb-op-geth:$TAG-amd64 \
+                --tag golemnetwork/golembase-op-geth:$SHORT_COMMIT-amd64 \
+                --tag golemnetwork/golembase-op-geth:$TAG-amd64 \
                 --push \
                 .
             fi
@@ -64,7 +64,7 @@ jobs:
             # For PRs, just build the image but don't push it
             docker buildx build \
               --platform linux/amd64 \
-              --tag quay.io/golemnetwork/gb-op-geth:pr-test-amd64 \
+              --tag golemnetwork/golembase-op-geth:pr-test-amd64 \
               .
           fi
 
@@ -76,7 +76,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
       - name: Login to Docker Registry
         run: |
-          echo "${{ secrets.QUAY_IO_PASSWORD }}" | docker login quay.io -u ${{ secrets.QUAY_IO_USERNAME }} --password-stdin
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
       - name: Build and push ARM64 Docker image
         run: |
           # Only build and push docker images for main branch and tags, not for PRs
@@ -86,8 +86,8 @@ jobs:
             if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
               docker buildx build \
                 --platform linux/arm64 \
-                --tag quay.io/golemnetwork/gb-op-geth:$SHORT_COMMIT-arm64 \
-                --tag quay.io/golemnetwork/gb-op-geth:latest-arm64 \
+                --tag golemnetwork/golembase-op-geth:$SHORT_COMMIT-arm64 \
+                --tag golemnetwork/golembase-op-geth:latest-arm64 \
                 --push \
                 .
             fi
@@ -97,8 +97,8 @@ jobs:
               TAG=${GITHUB_REF#refs/tags/}
               docker buildx build \
                 --platform linux/arm64 \
-                --tag quay.io/golemnetwork/gb-op-geth:$SHORT_COMMIT-arm64 \
-                --tag quay.io/golemnetwork/gb-op-geth:$TAG-arm64 \
+                --tag golemnetwork/golembase-op-geth:$SHORT_COMMIT-arm64 \
+                --tag golemnetwork/golembase-op-geth:$TAG-arm64 \
                 --push \
                 .
             fi
@@ -106,7 +106,7 @@ jobs:
             # For PRs, just build the image but don't push it
             docker buildx build \
               --platform linux/arm64 \
-              --tag quay.io/golemnetwork/gb-op-geth:pr-test-arm64 \
+              --tag golemnetwork/golembase-op-geth:pr-test-arm64 \
               .
           fi
 
@@ -130,15 +130,15 @@ jobs:
           if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
             # Create manifest for commit SHA
             docker buildx imagetools create \
-              --tag quay.io/golemnetwork/gb-op-geth:$SHORT_COMMIT \
-              quay.io/golemnetwork/gb-op-geth:$SHORT_COMMIT-amd64 \
-              quay.io/golemnetwork/gb-op-geth:$SHORT_COMMIT-arm64
+              --tag golemnetwork/golembase-op-geth:$SHORT_COMMIT \
+              golemnetwork/golembase-op-geth:$SHORT_COMMIT-amd64 \
+              golemnetwork/golembase-op-geth:$SHORT_COMMIT-arm64
             
             # Create manifest for latest
             docker buildx imagetools create \
-              --tag quay.io/golemnetwork/gb-op-geth:latest \
-              quay.io/golemnetwork/gb-op-geth:latest-amd64 \
-              quay.io/golemnetwork/gb-op-geth:latest-arm64
+              --tag golemnetwork/golembase-op-geth:latest \
+              golemnetwork/golembase-op-geth:latest-amd64 \
+              golemnetwork/golembase-op-geth:latest-arm64
           fi
           
           # If this is a tag (release), create manifest for the tag
@@ -147,13 +147,13 @@ jobs:
             
             # Create manifest for commit SHA
             docker buildx imagetools create \
-              --tag quay.io/golemnetwork/gb-op-geth:$SHORT_COMMIT \
-              quay.io/golemnetwork/gb-op-geth:$SHORT_COMMIT-amd64 \
-              quay.io/golemnetwork/gb-op-geth:$SHORT_COMMIT-arm64
+              --tag golemnetwork/golembase-op-geth:$SHORT_COMMIT \
+              golemnetwork/golembase-op-geth:$SHORT_COMMIT-amd64 \
+              golemnetwork/golembase-op-geth:$SHORT_COMMIT-arm64
             
             # Create manifest for tag
             docker buildx imagetools create \
-              --tag quay.io/golemnetwork/gb-op-geth:$TAG \
-              quay.io/golemnetwork/gb-op-geth:$TAG-amd64 \
-              quay.io/golemnetwork/gb-op-geth:$TAG-arm64
+              --tag golemnetwork/golembase-op-geth:$TAG \
+              golemnetwork/golembase-op-geth:$TAG-amd64 \
+              golemnetwork/golembase-op-geth:$TAG-arm64
           fi
