@@ -160,7 +160,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 	for _, toDelete := range tx.Delete {
 		metaData, err := entity.GetEntityMetaData(access, toDelete)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get entity meta data for update %s: %w", toDelete.Hex(), err)
+			return nil, fmt.Errorf("failed to get entity meta data for delete %s: %w", toDelete.Hex(), err)
 		}
 
 		if metaData.Owner != sender {
@@ -222,7 +222,7 @@ func (tx *StorageTransaction) Run(blockNumber uint64, txHash common.Hash, sender
 	for _, extend := range tx.Extend {
 		newExpiresAtBlock, err := entity.ExtendBTL(access, extend.EntityKey, extend.NumberOfBlocks)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to extend BTL of entity %s: %w", extend.EntityKey.Hex(), err)
 		}
 
 		oldExpiresAtBlock := newExpiresAtBlock - extend.NumberOfBlocks
