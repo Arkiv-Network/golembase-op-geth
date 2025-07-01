@@ -13,6 +13,8 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
 )
 
+// This regex should not allow $ as the first character, since we use that for
+// special meta-annotations like $owner.
 const AnnotationIdentRegex string = `[\p{L}_][\p{L}\p{N}_]*`
 
 var annotationIdentRegexCompiled *regexp.Regexp = regexp.MustCompile(fmt.Sprintf("^%s$", AnnotationIdentRegex))

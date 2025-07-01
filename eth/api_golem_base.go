@@ -134,6 +134,10 @@ func (ds *golemBaseDataSource) GetKeysForNumericAnnotation(key string, value uin
 	return ds.api.GetEntitiesForNumericAnnotationValue(key, value)
 }
 
+func (ds *golemBaseDataSource) GetKeysForOwner(owner common.Address) ([]common.Hash, error) {
+	return ds.api.GetEntitiesOfOwner(owner)
+}
+
 // GetEntityCount returns the total number of entities in the storage.
 func (api *golemBaseAPI) GetEntityCount() (uint64, error) {
 	stateDb, err := api.eth.BlockChain().StateAt(api.eth.BlockChain().CurrentHeader().Root)

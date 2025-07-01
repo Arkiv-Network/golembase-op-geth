@@ -39,3 +39,8 @@ Feature: Search
       key = 8e
       """
     Then I should see an error containing "unexpected token"
+
+  Scenario: search for entities of an owner
+    Given I have created an entity
+    When I search for entities of an owner
+    Then I should find 1 entity

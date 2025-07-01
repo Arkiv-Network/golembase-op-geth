@@ -2,6 +2,7 @@ package query
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
@@ -21,6 +22,8 @@ var lex = lexer.MustSimple([]lexer.SimpleRule{
 	{Name: "String", Pattern: `"(?:[^"\\]|\\.)*"`},
 	{Name: "Number", Pattern: `[0-9]+`},
 	{Name: "Ident", Pattern: entity.AnnotationIdentRegex},
+	// Meta-annotations, should start with $
+	{Name: "Owner", Pattern: `\$owner`},
 })
 
 // Expression is the top-level rule.
@@ -145,6 +148,7 @@ func (e *AndRHS) Evaluate(ds DataSource) ([]common.Hash, error) {
 // EqualExpr can be either an equality or a parenthesized expression.
 type EqualExpr struct {
 	Paren  *Expression `parser:"  \"(\" @@ \")\""`
+	Owner  *Ownership  `parser:"| @@"`
 	Assign *Equality   `parser:"| @@"`
 }
 
@@ -153,7 +157,30 @@ func (e *EqualExpr) Evaluate(ds DataSource) ([]common.Hash, error) {
 		return e.Paren.Evaluate(ds)
 	}
 
+	if e.Owner != nil {
+		return e.Owner.Evaluate(ds)
+	}
+
 	return e.Assign.Evaluate(ds)
+}
+
+// Ownership represents an ownership query, $owner = 0x....
+type Ownership struct {
+	Owner *string `parser:"Owner '=' @String"`
+}
+
+func (e *Ownership) Evaluate(ds DataSource) ([]common.Hash, error) {
+
+	if common.IsHexAddress(*e.Owner) {
+		address := common.HexToAddress(*e.Owner)
+		return ds.GetKeysForOwner(address)
+	}
+
+	return nil, fmt.Errorf(
+		"invalid value for owner, expected 20-byte hex string, got: %s",
+		*e.Owner,
+	)
+
 }
 
 // Equality represents a simple equality (e.g. name = 123).

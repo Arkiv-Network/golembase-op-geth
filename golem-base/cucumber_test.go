@@ -169,6 +169,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I submit a transaction to update the entity by non-owner$`, iSubmitATransactionToUpdateTheEntityByNonowner)
 	ctx.Step(`^the expired entities should be deleted$`, theExpiredEntitiesShouldBeDeleted)
 	ctx.Step(`^there are two entities that will expire in the next block$`, thereAreTwoEntitiesThatWillExpireInTheNextBlock)
+	ctx.Step(`^I search for entities of an owner$`, iSearchForEntitiesOfAnOwner)
 
 }
 
@@ -1378,4 +1379,18 @@ func theExpiredEntitiesShouldBeDeleted(ctx context.Context) error {
 
 	return nil
 
+}
+
+func iSearchForEntitiesOfAnOwner(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+
+	res := []golemtype.SearchResult{}
+
+	err := w.GethInstance.RPCClient.CallContext(ctx, &res, "golembase_queryEntities", fmt.Sprintf(`$owner="%s"`, w.FundedAccount.Address.Hex()))
+	if err != nil {
+		return fmt.Errorf("failed to get entities of owner: %w", err)
+	}
+
+	w.SearchResult = res
+	return nil
 }

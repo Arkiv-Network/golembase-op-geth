@@ -1,6 +1,7 @@
 package query_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -13,6 +14,7 @@ import (
 type fakeDataSource struct {
 	stringAnnotations  map[string]map[string][]common.Hash
 	numericAnnotations map[string]map[uint64][]common.Hash
+	ownerAddresses     map[common.Address][]common.Hash
 }
 
 func (f *fakeDataSource) GetKeysForStringAnnotation(key, value string) ([]common.Hash, error) {
@@ -21,6 +23,10 @@ func (f *fakeDataSource) GetKeysForStringAnnotation(key, value string) ([]common
 
 func (f *fakeDataSource) GetKeysForNumericAnnotation(key string, value uint64) ([]common.Hash, error) {
 	return f.numericAnnotations[key][value], nil
+}
+
+func (f *fakeDataSource) GetKeysForOwner(owner common.Address) ([]common.Hash, error) {
+	return f.ownerAddresses[owner], nil
 }
 
 func TestEqualExpr(t *testing.T) {
@@ -165,5 +171,35 @@ func TestParenthesesExpr(t *testing.T) {
 	require.ElementsMatch(t, []common.Hash{
 		common.HexToHash("0x3"),
 		common.HexToHash("0x5"),
+	}, res)
+}
+
+func TestOwner(t *testing.T) {
+	owner := common.HexToAddress("0x1")
+
+	ds := &fakeDataSource{
+		stringAnnotations: map[string]map[string][]common.Hash{
+			"name": {
+				"abc": []common.Hash{common.HexToHash("0x3")},
+			},
+		},
+		numericAnnotations: map[string]map[uint64][]common.Hash{
+			"age": {
+				123: []common.Hash{common.HexToHash("0x1"), common.HexToHash("0x2")},
+			},
+		},
+		ownerAddresses: map[common.Address][]common.Hash{
+			owner: {common.HexToHash("0x1"), common.HexToHash("0x3")},
+		},
+	}
+
+	expr, err := query.Parse(fmt.Sprintf(`(age = 123 || name = "abc") && $owner = "%s"`, owner))
+	require.NoError(t, err)
+
+	res, err := expr.Evaluate(ds)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []common.Hash{
+		common.HexToHash("0x1"),
+		common.HexToHash("0x3"),
 	}, res)
 }
