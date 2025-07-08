@@ -249,6 +249,15 @@ func main() {
 						log.Info("operation", "operation", op)
 					}
 
+					err = txDB.UpdateProcessingStatus(ctx, sqlitegolem.UpdateProcessingStatusParams{
+						Network:                  networkID.String(),
+						LastProcessedBlockNumber: int64(blockWal.BlockInfo.Number),
+						LastProcessedBlockHash:   blockWal.BlockInfo.Hash.Hex(),
+					})
+					if err != nil {
+						return fmt.Errorf("failed to insert processing status: %w", err)
+					}
+
 					return tx.Commit()
 
 				}()
