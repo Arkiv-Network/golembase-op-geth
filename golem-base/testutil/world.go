@@ -29,14 +29,32 @@ func NewWorld(ctx context.Context, gethPath string) (*World, error) {
 		return nil, fmt.Errorf("failed to start geth instance: %w", err)
 	}
 
-	acc, err := geth.createAccountAndTransferFunds(ctx, EthToWei(100))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create account and transfer funds: %w", err)
+	var acc *FundedAccount
+	for i := range 10 {
+		acc, err = geth.createAccountAndTransferFunds(ctx, EthToWei(100))
+		if err == nil {
+			break
+		} else {
+			if i < 9 {
+				continue
+			} else {
+				return nil, fmt.Errorf("failed to create account and transfer funds: %w", err)
+			}
+		}
 	}
 
-	acc2, err := geth.createAccountAndTransferFunds(ctx, EthToWei(100))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create account and transfer funds: %w", err)
+	var acc2 *FundedAccount
+	for i := range 10 {
+		acc2, err = geth.createAccountAndTransferFunds(ctx, EthToWei(100))
+		if err == nil {
+			break
+		} else {
+			if i < 9 {
+				continue
+			} else {
+				return nil, fmt.Errorf("failed to create account and transfer funds: %w", err)
+			}
+		}
 	}
 
 	return &World{
