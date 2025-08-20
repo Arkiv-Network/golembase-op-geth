@@ -1,3 +1,3 @@
 package useraccount
 
-const PrivateKeyPath = "golembase/private.key"
+const WalletPath = "golembase/wallet.json"

@@ -1,14 +1,20 @@
 package create
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
+	"strings"
+	"syscall"
 
 	"github.com/adrg/xdg"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/golembase/account/pkg/useraccount"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/urfave/cli/v2"
+	"golang.org/x/term"
 )
 
 func Create() *cli.Command {
@@ -16,42 +22,85 @@ func Create() *cli.Command {
 		Name:  "create",
 		Usage: "Create a new account",
 		Action: func(c *cli.Context) error {
-			privageKeyPath, err := xdg.ConfigFile(useraccount.PrivateKeyPath)
+			// This creates the directories if they don't already exist
+			walletPath, err := xdg.ConfigFile(useraccount.WalletPath)
 			if err != nil {
-				return fmt.Errorf("failed to get config file path: %w", err)
+				return fmt.Errorf("failed to create config file path: %w", err)
 			}
 
-			fmt.Println("privageKeyPath", privageKeyPath)
+			fmt.Println("walletPath", walletPath)
 
-			privageKeyBytes, err := os.ReadFile(privageKeyPath)
-			switch {
-			case errors.Is(err, os.ErrNotExist):
-				privateKey, err := crypto.GenerateKey()
-				if err != nil {
-					return fmt.Errorf("failed to generate private key: %w", err)
+			info, err := os.Stat(walletPath)
+			// We only care if the error is insufficient permissions. If the file does not
+			// exist or its size is zero, we can ignore the error since we are creating it.
+			if err == nil {
+				if info.Size() != 0 {
+					return fmt.Errorf("A wallet already exists at %s", walletPath)
 				}
-				privateKeyBytes := crypto.FromECDSA(privateKey)
-				err = os.WriteFile(privageKeyPath, privateKeyBytes, 0600)
-				if err != nil {
-					return fmt.Errorf("failed to write private key: %w", err)
-				}
-
-				fmt.Println("Private key generated and saved to", privageKeyPath)
-				fmt.Println("Address:", crypto.PubkeyToAddress(privateKey.PublicKey).Hex())
-
-			case err != nil:
-				return fmt.Errorf("failed to read private key: %w", err)
-			default:
-				privateKey, err := crypto.ToECDSA(privageKeyBytes)
-				if err != nil {
-					return fmt.Errorf("failed to deserialize private key: %w", err)
-				}
-				fmt.Println("Private key already exists")
-				fmt.Println("Address:", crypto.PubkeyToAddress(privateKey.PublicKey).Hex())
+			} else if os.IsPermission(err) {
+				return fmt.Errorf("failed to stat walletPath %s: %w", walletPath, err)
 			}
+
+			password, err := GetPasswordFromStdinOrPrompt()
+			if err != nil {
+				return fmt.Errorf("failed to create password: %w", err)
+			}
+
+			ks := keystore.NewKeyStore(filepath.Dir(walletPath), keystore.StandardScryptN, keystore.StandardScryptP)
+			account, err := ks.NewAccount(password)
+			if err != nil {
+				return fmt.Errorf("failed to create new account: %w", err)
+			}
+
+			created := account.URL.Path
+			if created != walletPath {
+				if err := os.Rename(created, walletPath); err != nil {
+					return fmt.Errorf("failed to rename wallet file: %w", err)
+				}
+			}
+
+			fmt.Println("New wallet created", walletPath)
+			fmt.Println("Address:", account.Address.Hex())
 
 			return nil
-
 		},
 	}
+}
+
+// GetPasswordFromStdinOrPrompt reads a password from stdin if piped, or interactively if in a terminal
+// confirming that the passwords match
+func GetPasswordFromStdinOrPrompt() (string, error) {
+	// Check if input is coming from a terminal
+	if term.IsTerminal(int(syscall.Stdin)) {
+
+		fmt.Print("Enter wallet password: ")
+		bytePassword, err := term.ReadPassword(int(syscall.Stdin))
+		fmt.Println()
+		if err != nil {
+			return "", err
+		}
+		password := strings.TrimSpace(string(bytePassword))
+
+		fmt.Print("Confirm password: ")
+		byteConfirm, err := term.ReadPassword(int(syscall.Stdin))
+		fmt.Println()
+		if err != nil {
+			return "", err
+		}
+		confirm := strings.TrimSpace(string(byteConfirm))
+
+		if password != confirm {
+			return "", fmt.Errorf("passwords did not match")
+		}
+
+		return password, nil
+	}
+
+	// Otherwise, read from stdin (e.g., piped input)
+	reader := bufio.NewReader(os.Stdin)
+	password, err := reader.ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", err
+	}
+	return strings.TrimSpace(password), nil
 }

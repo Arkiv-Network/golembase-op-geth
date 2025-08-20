@@ -14,8 +14,8 @@ The CLI follows the XDG Base Directory Specification for storing configuration f
 ### Account Management
 
 - `account create`: Creates a new account
-  - Generates a new private key
-  - Saves it to the XDG config directory (e.g., `~/Library/Application Support/golembase/private.key` on macOS)
+  - Generates a new `wallet.json` file
+  - Saves it to the XDG config directory (e.g., `~/Library/Application Support/golembase/wallet.json` on macOS)
   - Displays the generated Ethereum address
 
 - `account fund`: Funds an account with ETH

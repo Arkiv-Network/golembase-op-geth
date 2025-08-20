@@ -13,6 +13,7 @@ import (
 func Query() *cli.Command {
 	cfg := struct {
 		nodeURL string
+		NoData  bool
 	}{}
 	return &cli.Command{
 		Name:  "query",
@@ -25,6 +26,12 @@ func Query() *cli.Command {
 				EnvVars:     []string{"NODE_URL"},
 				Destination: &cfg.nodeURL,
 			},
+			&cli.BoolFlag{
+				Name:        "no-data",
+				Usage:       "Do not print the stored value",
+				Destination: &cfg.NoData,
+				EnvVars:     []string{"NO_DATA"},
+			},
 		},
 		Action: func(c *cli.Context) error {
 
@@ -33,7 +40,7 @@ func Query() *cli.Command {
 
 			query := c.Args().First()
 			if query == "" {
-				return fmt.Errorf("query is required")
+				return fmt.Errorf("query string is required")
 			}
 			// Connect to the geth node
 			rpcClient, err := rpc.Dial(cfg.nodeURL)
@@ -56,7 +63,9 @@ func Query() *cli.Command {
 
 			for _, r := range res {
 				fmt.Println(r.Key)
-				fmt.Println("  payload:", string(r.Value))
+				if !cfg.NoData {
+					fmt.Println("  payload:", string(r.Value))
+				}
 			}
 
 			return nil

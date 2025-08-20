@@ -48,7 +48,7 @@
             ];
 
             proxyVendor = true;
-            vendorHash = "sha256-+aHFzxh0mAugONuaP58+W9TUncwY0ATg3WhUn6zNR8s=";
+            vendorHash = "sha256-+xBV3MAKpTJoscliPQssC6na9DTF0VO43AUlNpadVO4=";
 
             ldflags = [
               "-s"
