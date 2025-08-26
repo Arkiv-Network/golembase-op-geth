@@ -10,8 +10,14 @@ INSERT INTO numeric_annotations (entity_key, annotation_key, value) VALUES (?, ?
 -- name: GetEntity :one
 SELECT expires_at, payload, owner_address FROM entities WHERE key = ?;
 
+-- name: GetEntityPayload :one
+SELECT payload FROM entities WHERE key = ?;
+
 -- name: GetEntitiesByOwner :many
 SELECT key, expires_at, payload FROM entities WHERE owner_address = ?;
+
+-- name: GetEntityKeysByOwner :many
+SELECT key FROM entities WHERE owner_address = ? ORDER BY key;
 
 -- name: GetStringAnnotations :many
 SELECT annotation_key, value FROM string_annotations WHERE entity_key = ?;
@@ -69,3 +75,51 @@ DELETE FROM numeric_annotations;
 
 -- name: DeleteAllProcessingStatus :exec
 DELETE FROM processing_status;
+
+-- name: GetEntityMetadata :one
+SELECT 
+  expires_at,
+  owner_address,
+  payload
+FROM entities
+WHERE key = ?;
+
+-- name: GetEntityStringAnnotations :many
+SELECT 
+  annotation_key,
+  value
+FROM string_annotations
+WHERE entity_key = ?
+ORDER BY annotation_key;
+
+-- name: GetEntityNumericAnnotations :many
+SELECT 
+  annotation_key,
+  value
+FROM numeric_annotations
+WHERE entity_key = ?
+ORDER BY annotation_key;
+
+-- name: GetEntitiesToExpireAtBlock :many
+SELECT key
+FROM entities
+WHERE expires_at = ?
+ORDER BY key;
+
+-- name: GetEntitiesForStringAnnotation :many
+SELECT entity_key
+FROM string_annotations
+WHERE annotation_key = ? AND value = ?
+ORDER BY entity_key;
+
+-- name: GetEntitiesForNumericAnnotation :many
+SELECT entity_key
+FROM numeric_annotations
+WHERE annotation_key = ? AND value = ?
+ORDER BY entity_key;
+
+-- name: GetAllEntityKeys :many
+SELECT key FROM entities ORDER BY key;
+
+-- name: GetEntityCount :one
+SELECT COUNT(*) FROM entities;

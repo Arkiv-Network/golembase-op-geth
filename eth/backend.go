@@ -269,30 +269,32 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 	overrides.ApplySuperchainUpgrades = config.ApplySuperchainUpgrades
 
-	onNewBlock := func(db *state.CachingDB, hc *core.HeaderChain, chainID *big.Int, block *types.Block, receipts []*types.Receipt) error {
-		return nil
+	log.Info("Creating SQLStore", "path", stack.Config().GolemBaseSQLStateFile)
+	sqlStateFile := stack.Config().GolemBaseSQLStateFile
+
+	if sqlStateFile == "" {
+		sqlStateFile = ":memory:"
 	}
 
-	if stack.Config().GolemBaseSQLStateFile != "" {
+	st, err := sqlstore.NewStore(
+		stack.Config().GolemBaseSQLStateFile,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create SQLStore: %w", err)
+	}
 
-		log.Info("Creating SQLStore", "path", stack.Config().GolemBaseSQLStateFile)
-		st, err := sqlstore.NewStore(
-			stack.Config().GolemBaseSQLStateFile,
+	onNewBlock := func(db *state.CachingDB, hc *core.HeaderChain, chainID *big.Int, block *types.Block, receipts []*types.Receipt) error {
+		if sqlStateFile == ":memory:" {
+			return nil
+		}
+		return sqlstore.WriteLogForBlockSqlite(
+			st,
+			db,
+			hc,
+			block,
+			chainID,
+			receipts,
 		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create SQLStore: %w", err)
-		}
-
-		onNewBlock = func(db *state.CachingDB, hc *core.HeaderChain, chainID *big.Int, block *types.Block, receipts []*types.Receipt) error {
-			return sqlstore.WriteLogForBlockSqlite(
-				st,
-				db,
-				hc,
-				block,
-				chainID,
-				receipts,
-			)
-		}
 	}
 
 	eth.blockchain, err = core.NewBlockChainWithOnNewBlock(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, &config.TransactionHistory, onNewBlock)
@@ -421,6 +423,12 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	eth.netRPCService = ethapi.NewNetAPI(eth.p2pServer, networkID)
 
 	// Register the backend on the node
+	stack.RegisterAPIs([]rpc.API{
+		{
+			Namespace: "golembase",
+			Service:   NewGolemBaseAPI(eth, st),
+		},
+	})
 	stack.RegisterAPIs(eth.APIs())
 	stack.RegisterProtocols(eth.Protocols())
 	stack.RegisterLifecycle(eth)
@@ -480,10 +488,6 @@ func (s *Ethereum) APIs() []rpc.API {
 		}, {
 			Namespace: "net",
 			Service:   s.netRPCService,
-		},
-		{
-			Namespace: "golembase",
-			Service:   NewGolemBaseAPI(s),
 		},
 	}...)
 }

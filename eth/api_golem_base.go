@@ -1,108 +1,85 @@
 package eth
 
 import (
+	"context"
 	"fmt"
 	"math/big"
-	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/golem-base/golemtype"
 	"github.com/ethereum/go-ethereum/golem-base/query"
+	"github.com/ethereum/go-ethereum/golem-base/sqlstore"
 	"github.com/ethereum/go-ethereum/golem-base/storageaccounting"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/allentities"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/annotationindex"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entitiesofowner"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entityexpiration"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
 )
 
 // golemBaseAPI offers helper utils
 type golemBaseAPI struct {
-	eth *Ethereum
+	eth   *Ethereum
+	store *sqlstore.SQLStore
 }
 
-func NewGolemBaseAPI(eth *Ethereum) *golemBaseAPI {
+func NewGolemBaseAPI(eth *Ethereum, store *sqlstore.SQLStore) *golemBaseAPI {
 	return &golemBaseAPI{
-		eth: eth,
+		eth:   eth,
+		store: store,
 	}
 }
 
-func (api *golemBaseAPI) GetStorageValue(key common.Hash) ([]byte, error) {
-	header := api.eth.blockchain.CurrentBlock()
-	stateDb, err := api.eth.BlockChain().StateAt(header.Root)
+func (api *golemBaseAPI) GetStorageValue(ctx context.Context, key common.Hash) ([]byte, error) {
+	payload, err := api.store.GetQueries().GetEntityPayload(ctx, key.Hex())
+	if err != nil {
+		return nil, err
+	}
+	return payload, nil
+
+}
+
+func (api *golemBaseAPI) GetEntityMetaData(ctx context.Context, key common.Hash) (*entity.EntityMetaData, error) {
+	metadata, err := api.store.GetEntityMetaData(ctx, key)
 	if err != nil {
 		return nil, err
 	}
 
-	return entity.GetPayload(stateDb, key), nil
+	return metadata, nil
 }
 
-func (api *golemBaseAPI) GetEntityMetaData(key common.Hash) (*entity.EntityMetaData, error) {
-	header := api.eth.blockchain.CurrentBlock()
-	stateDb, err := api.eth.BlockChain().StateAt(header.Root)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get state: %w", err)
-	}
-
-	return entity.GetEntityMetaData(stateDb, key)
-}
-
-func (api *golemBaseAPI) GetEntitiesToExpireAtBlock(blockNumber uint64) ([]common.Hash, error) {
-	header := api.eth.blockchain.CurrentBlock()
-	stateDb, err := api.eth.BlockChain().StateAt(header.Root)
+func (api *golemBaseAPI) GetEntitiesToExpireAtBlock(ctx context.Context, blockNumber uint64) ([]common.Hash, error) {
+	entities, err := api.store.GetEntitiesToExpireAtBlock(ctx, blockNumber)
 	if err != nil {
 		return nil, err
 	}
 
-	out := slices.Collect(entityexpiration.IteratorOfEntitiesToExpireAtBlock(stateDb, blockNumber))
-	if out == nil {
-		out = make([]common.Hash, 0)
-	}
-	return out, nil
+	return entities, nil
 }
 
-func (api *golemBaseAPI) GetEntitiesForStringAnnotationValue(key, value string) ([]common.Hash, error) {
-	header := api.eth.blockchain.CurrentBlock()
-	stateDb, err := api.eth.BlockChain().StateAt(header.Root)
+func (api *golemBaseAPI) GetEntitiesForStringAnnotationValue(ctx context.Context, key, value string) ([]common.Hash, error) {
+	entities, err := api.store.GetEntitiesForStringAnnotationValue(ctx, key, value)
 	if err != nil {
 		return nil, err
 	}
 
-	entitySetKey := annotationindex.StringAnnotationIndexKey(key, value)
-
-	out := slices.Collect(keyset.Iterate(stateDb, entitySetKey))
-	if out == nil {
-		out = make([]common.Hash, 0)
-	}
-	return out, nil
+	return entities, nil
 }
 
-func (api *golemBaseAPI) GetEntitiesForNumericAnnotationValue(key string, value uint64) ([]common.Hash, error) {
-	header := api.eth.blockchain.CurrentBlock()
-	stateDb, err := api.eth.BlockChain().StateAt(header.Root)
+func (api *golemBaseAPI) GetEntitiesForNumericAnnotationValue(ctx context.Context, key string, value uint64) ([]common.Hash, error) {
+	entities, err := api.store.GetEntitiesForNumericAnnotationValue(ctx, key, value)
 	if err != nil {
 		return nil, err
 	}
 
-	entityKeys := annotationindex.NumericAnnotationIndexKey(key, value)
-
-	out := slices.Collect(keyset.Iterate(stateDb, entityKeys))
-	if out == nil {
-		out = make([]common.Hash, 0)
-	}
-	return out, nil
+	return entities, nil
 }
 
-func (api *golemBaseAPI) QueryEntities(req string) ([]golemtype.SearchResult, error) {
+func (api *golemBaseAPI) QueryEntities(ctx context.Context, req string) ([]golemtype.SearchResult, error) {
 
 	expr, err := query.Parse(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse query: %w", err)
 	}
 
-	ds := &golemBaseDataSource{api: api}
+	ds := &golemBaseDataSource{api: api, ctx: ctx}
 	entities, err := expr.Evaluate(ds)
 	if err != nil {
 		return nil, fmt.Errorf("failed to evaluate query: %w", err)
@@ -111,7 +88,7 @@ func (api *golemBaseAPI) QueryEntities(req string) ([]golemtype.SearchResult, er
 	searchResults := make([]golemtype.SearchResult, 0)
 
 	for _, key := range entities {
-		v, err := api.GetStorageValue(key)
+		v, err := api.GetStorageValue(ctx, key)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get storage value for key %s: %w", key.Hex(), err)
 		}
@@ -127,65 +104,48 @@ func (api *golemBaseAPI) QueryEntities(req string) ([]golemtype.SearchResult, er
 
 type golemBaseDataSource struct {
 	api *golemBaseAPI
+	ctx context.Context
 }
 
 func (ds *golemBaseDataSource) GetKeysForStringAnnotation(key, value string) ([]common.Hash, error) {
-	return ds.api.GetEntitiesForStringAnnotationValue(key, value)
+	return ds.api.GetEntitiesForStringAnnotationValue(ds.ctx, key, value)
 }
 
 func (ds *golemBaseDataSource) GetKeysForNumericAnnotation(key string, value uint64) ([]common.Hash, error) {
-	return ds.api.GetEntitiesForNumericAnnotationValue(key, value)
+	return ds.api.GetEntitiesForNumericAnnotationValue(ds.ctx, key, value)
 }
 
 func (ds *golemBaseDataSource) GetKeysForOwner(owner common.Address) ([]common.Hash, error) {
-	return ds.api.GetEntitiesOfOwner(owner)
+	return ds.api.GetEntitiesOfOwner(ds.ctx, owner)
 }
 
 // GetEntityCount returns the total number of entities in the storage.
-func (api *golemBaseAPI) GetEntityCount() (uint64, error) {
-	stateDb, err := api.eth.BlockChain().StateAt(api.eth.BlockChain().CurrentHeader().Root)
+func (api *golemBaseAPI) GetEntityCount(ctx context.Context) (uint64, error) {
+	count, err := api.store.GetEntityCount(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get state: %w", err)
+		return 0, err
 	}
 
-	// Use keyset.Size to get the count of entities from the global registry
-	count := keyset.Size(stateDb, allentities.AllEntitiesKey)
-
-	return count.Uint64(), nil
+	return count, nil
 }
 
 // GetAllEntityKeys returns all entity keys in the storage.
-func (api *golemBaseAPI) GetAllEntityKeys() ([]common.Hash, error) {
-	stateDb, err := api.eth.BlockChain().StateAt(api.eth.BlockChain().CurrentHeader().Root)
+func (api *golemBaseAPI) GetAllEntityKeys(ctx context.Context) ([]common.Hash, error) {
+	entities, err := api.store.GetAllEntityKeys(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get state: %w", err)
+		return nil, err
 	}
 
-	// Use the iterator from allentities package to gather all entity hashes
-	var entityKeys []common.Hash
-
-	for hash := range allentities.Iterate(stateDb) {
-		entityKeys = append(entityKeys, hash)
-	}
-
-	if entityKeys == nil {
-		entityKeys = make([]common.Hash, 0)
-	}
-	return entityKeys, nil
+	return entities, nil
 }
 
-func (api *golemBaseAPI) GetEntitiesOfOwner(owner common.Address) ([]common.Hash, error) {
-	stateDb, err := api.eth.BlockChain().StateAt(api.eth.BlockChain().CurrentHeader().Root)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get state: %w", err)
+func (api *golemBaseAPI) GetEntitiesOfOwner(ctx context.Context, owner common.Address) ([]common.Hash, error) {
+	entities, err := api.store.GetEntitiesOfOwner(ctx, owner)
+	if err == nil {
+		return entities, nil
 	}
 
-	entityKeys := slices.Collect(entitiesofowner.Iterate(stateDb, owner))
-
-	if entityKeys == nil {
-		entityKeys = make([]common.Hash, 0)
-	}
-	return entityKeys, nil
+	return entities, nil
 }
 
 func (api *golemBaseAPI) GetNumberOfUsedSlots() (*hexutil.Big, error) {

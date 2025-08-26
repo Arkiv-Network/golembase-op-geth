@@ -124,6 +124,167 @@ func (e *SQLStore) GetProcessingStatus(ctx context.Context, networkID string) (*
 	return &result, nil
 }
 
+// GetEntitiesToExpireAtBlock retrieves all entity keys that expire at the specified block
+func (e *SQLStore) GetEntitiesToExpireAtBlock(ctx context.Context, blockNumber uint64) ([]common.Hash, error) {
+	keys, err := e.GetQueries().GetEntitiesToExpireAtBlock(ctx, int64(blockNumber))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get entities expiring at block %d: %w", blockNumber, err)
+	}
+
+	// Convert string keys to common.Hash
+	result := make([]common.Hash, 0, len(keys))
+	for _, keyHex := range keys {
+		result = append(result, common.HexToHash(keyHex))
+	}
+
+	return result, nil
+}
+
+// GetEntitiesForStringAnnotationValue retrieves all entity keys that have a specific string annotation with the given value
+func (e *SQLStore) GetEntitiesForStringAnnotationValue(ctx context.Context, annotationKey, value string) ([]common.Hash, error) {
+	keys, err := e.GetQueries().GetEntitiesForStringAnnotation(ctx, sqlitegolem.GetEntitiesForStringAnnotationParams{
+		AnnotationKey: annotationKey,
+		Value:         value,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get entities for string annotation %s=%s: %w", annotationKey, value, err)
+	}
+
+	// Convert string keys to common.Hash
+	result := make([]common.Hash, 0, len(keys))
+	for _, keyHex := range keys {
+		result = append(result, common.HexToHash(keyHex))
+	}
+
+	return result, nil
+}
+
+// GetEntitiesForNumericAnnotationValue retrieves all entity keys that have a specific numeric annotation with the given value
+func (e *SQLStore) GetEntitiesForNumericAnnotationValue(ctx context.Context, annotationKey string, value uint64) ([]common.Hash, error) {
+	keys, err := e.GetQueries().GetEntitiesForNumericAnnotation(ctx, sqlitegolem.GetEntitiesForNumericAnnotationParams{
+		AnnotationKey: annotationKey,
+		Value:         int64(value),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get entities for numeric annotation %s=%d: %w", annotationKey, value, err)
+	}
+
+	// Convert string keys to common.Hash
+	result := make([]common.Hash, 0, len(keys))
+	for _, keyHex := range keys {
+		result = append(result, common.HexToHash(keyHex))
+	}
+
+	return result, nil
+}
+
+// GetEntitiesOfOwner retrieves all entity keys owned by the specified address
+func (e *SQLStore) GetEntitiesOfOwner(ctx context.Context, owner common.Address) ([]common.Hash, error) {
+	keys, err := e.GetQueries().GetEntityKeysByOwner(ctx, owner.Hex())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get entities for owner %s: %w", owner.Hex(), err)
+	}
+
+	// Convert string keys to common.Hash
+	result := make([]common.Hash, 0, len(keys))
+	for _, keyHex := range keys {
+		result = append(result, common.HexToHash(keyHex))
+	}
+
+	return result, nil
+}
+
+// GetAllEntityKeys retrieves all entity keys from the database
+func (e *SQLStore) GetAllEntityKeys(ctx context.Context) ([]common.Hash, error) {
+	keys, err := e.GetQueries().GetAllEntityKeys(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all entity keys: %w", err)
+	}
+
+	// Convert string keys to common.Hash
+	result := make([]common.Hash, 0, len(keys))
+	for _, keyHex := range keys {
+		result = append(result, common.HexToHash(keyHex))
+	}
+
+	return result, nil
+}
+
+// GetEntityCount retrieves the total number of entities in the database
+func (e *SQLStore) GetEntityCount(ctx context.Context) (uint64, error) {
+	count, err := e.GetQueries().GetEntityCount(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get entity count: %w", err)
+	}
+
+	return uint64(count), nil
+}
+
+// GetEntityMetaData retrieves entity metadata from the database using a transaction
+func (e *SQLStore) GetEntityMetaData(ctx context.Context, key common.Hash) (*entity.EntityMetaData, error) {
+	// Begin a read-only transaction for consistency
+	tx, err := e.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback() // Safe to call even after commit
+
+	txDB := sqlitegolem.New(tx)
+	keyHex := key.Hex()
+
+	// Get main entity data
+	entityData, err := txDB.GetEntityMetadata(ctx, keyHex)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("entity %s not found", keyHex)
+		}
+		return nil, fmt.Errorf("failed to get entity metadata: %w", err)
+	}
+
+	// Get string annotations
+	stringAnnotRows, err := txDB.GetEntityStringAnnotations(ctx, keyHex)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get string annotations: %w", err)
+	}
+
+	// Get numeric annotations
+	numericAnnotRows, err := txDB.GetEntityNumericAnnotations(ctx, keyHex)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get numeric annotations: %w", err)
+	}
+
+	// Convert to entity.EntityMetaData structure
+	metadata := &entity.EntityMetaData{
+		ExpiresAtBlock:     uint64(entityData.ExpiresAt),
+		StringAnnotations:  make([]entity.StringAnnotation, len(stringAnnotRows)),
+		NumericAnnotations: make([]entity.NumericAnnotation, len(numericAnnotRows)),
+		Owner:              common.HexToAddress(entityData.OwnerAddress),
+	}
+
+	// Convert string annotations
+	for i, row := range stringAnnotRows {
+		metadata.StringAnnotations[i] = entity.StringAnnotation{
+			Key:   row.AnnotationKey,
+			Value: row.Value,
+		}
+	}
+
+	// Convert numeric annotations
+	for i, row := range numericAnnotRows {
+		metadata.NumericAnnotations[i] = entity.NumericAnnotation{
+			Key:   row.AnnotationKey,
+			Value: uint64(row.Value),
+		}
+	}
+
+	// Commit the transaction (read-only, but ensures consistency)
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return metadata, nil
+}
+
 func (e *SQLStore) SnapSyncToBlock(
 	ctx context.Context,
 	networkID string,

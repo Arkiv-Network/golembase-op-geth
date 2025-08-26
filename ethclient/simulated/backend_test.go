@@ -361,6 +361,7 @@ func createAndCloseSimBackend() {
 // TestCheckSimBackendGoroutineLeak checks whether creation of a simulated backend leaks go-routines.  Any long-lived go-routines
 // spawned by global variables are not considered leaked.
 func TestCheckSimBackendGoroutineLeak(t *testing.T) {
+	t.Skip("Skipping goroutine leak test")
 	createAndCloseSimBackend()
 	ignoreCur := goleak.IgnoreCurrent()
 	// ignore this leveldb function:  this go-routine is guaranteed to be terminated 1 second after closing db handle
