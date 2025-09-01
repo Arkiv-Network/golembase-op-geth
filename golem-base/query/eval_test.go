@@ -67,7 +67,7 @@ func TestEqualExpr(t *testing.T) {
 	)
 
 	// But symbols should fail
-	expr, err = query.Parse("foo@ = \"bar\"")
+	_, err = query.Parse("foo@ = \"bar\"")
 	require.Error(t, err)
 }
 
@@ -141,16 +141,17 @@ func TestParenthesesExpr(t *testing.T) {
 		With nicer formatting:
 
 		WITH
-		table_1 AS (SELECT entity_key FROM annotations WHERE annotation_key = ? AND numeric_value = ?),
-		table_2 AS (SELECT entity_key FROM annotations WHERE annotation_key = ? AND string_value = ?),
+		table_1 AS (SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?),
+		table_2 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?),
 		table_3 AS (SELECT * FROM table_1 UNION SELECT * FROM table_2),
-		table_4 AS (SELECT entity_key FROM annotations WHERE annotation_key = ? AND string_value = ?),
+		table_4 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?),
 		table_5 AS (SELECT * FROM table_3 INTERSECT SELECT * FROM table_4),
-		table_6 AS (SELECT entity_key FROM annotations WHERE annotation_key = ? AND numeric_value = ?),
-		table_7 AS (SELECT entity_key FROM annotations WHERE annotation_key = ? AND numeric_value = ?),
+		table_6 AS (SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?),
+		table_7 AS (SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?),
 		table_8 AS (SELECT * FROM table_6 INTERSECT SELECT * FROM table_7),
 		table_9 AS (SELECT * FROM table_5 UNION SELECT * FROM table_8)
 		SELECT * FROM table_9
+		ORDER BY 1
 	*/
 
 	res := expr.Evaluate()
@@ -196,6 +197,26 @@ func TestOwner(t *testing.T) {
 			"name",
 			"abc",
 			owner.Hex(),
+		},
+		res.Args,
+	)
+}
+
+func TestGlob(t *testing.T) {
+	expr, err := query.Parse(`age ~ "abc"`)
+	require.NoError(t, err)
+
+	res := expr.Evaluate()
+
+	require.Equal(t,
+		"WITH table_1 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value GLOB ?) SELECT * FROM table_1 ORDER BY 1",
+		res.Query,
+	)
+
+	require.ElementsMatch(t,
+		[]any{
+			"age",
+			"abc",
 		},
 		res.Args,
 	)

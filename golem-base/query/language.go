@@ -23,6 +23,8 @@ var lex = lexer.MustSimple([]lexer.SimpleRule{
 	{Name: "Leqt", Pattern: `<=`},
 	{Name: "Gt", Pattern: `>`},
 	{Name: "Lt", Pattern: `<`},
+	{Name: "Glob", Pattern: `~`},
+	{Name: "Not", Pattern: `!`},
 	{Name: "String", Pattern: `"(?:[^"\\]|\\.)*"`},
 	{Name: "Number", Pattern: `[0-9]+`},
 	{Name: "Ident", Pattern: entity.AnnotationIdentRegex},
@@ -45,6 +47,27 @@ type QueryBuilder struct {
 func (b *QueryBuilder) nextTableName() string {
 	b.tableCounter = b.tableCounter + 1
 	return fmt.Sprintf("table_%d", b.tableCounter)
+}
+
+func (b *QueryBuilder) writeComma() {
+	if b.needsComma {
+		b.tableBuilder.WriteString(", ")
+	} else {
+		b.needsComma = true
+	}
+}
+
+func (b *QueryBuilder) createLeafQuery(query string, args ...any) string {
+	tableName := b.nextTableName()
+	b.writeComma()
+	b.tableBuilder.WriteString(tableName)
+	b.tableBuilder.WriteString(" AS (")
+	b.tableBuilder.WriteString(query)
+	b.tableBuilder.WriteString(")")
+
+	b.args = append(b.args, args...)
+
+	return tableName
 }
 
 // Expression is the top-level rule.
@@ -96,11 +119,7 @@ func (e *OrExpression) Evaluate(b *QueryBuilder) string {
 		rightTable := rhs.Evaluate(b)
 		tableName = b.nextTableName()
 
-		if b.needsComma {
-			b.tableBuilder.WriteString(", ")
-		} else {
-			b.needsComma = true
-		}
+		b.writeComma()
 
 		b.tableBuilder.WriteString(tableName)
 		b.tableBuilder.WriteString(" AS (")
@@ -140,11 +159,7 @@ func (e *AndExpression) Evaluate(b *QueryBuilder) string {
 		rightTable := rhs.Evaluate(b)
 		tableName = b.nextTableName()
 
-		if b.needsComma {
-			b.tableBuilder.WriteString(", ")
-		} else {
-			b.needsComma = true
-		}
+		b.writeComma()
 
 		b.tableBuilder.WriteString(tableName)
 		b.tableBuilder.WriteString(" AS (")
@@ -180,6 +195,7 @@ type EqualExpr struct {
 	LessOrEqualThan    *LessOrEqualThan    `parser:"| @@"`
 	GreaterThan        *GreaterThan        `parser:"| @@"`
 	GreaterOrEqualThan *GreaterOrEqualThan `parser:"| @@"`
+	Glob               *Glob               `parser:"| @@"`
 }
 
 func (e *EqualExpr) Evaluate(b *QueryBuilder) string {
@@ -207,6 +223,10 @@ func (e *EqualExpr) Evaluate(b *QueryBuilder) string {
 		return e.GreaterOrEqualThan.Evaluate(b)
 	}
 
+	if e.Glob != nil {
+		return e.Glob.Evaluate(b)
+	}
+
 	if e.Assign != nil {
 		return e.Assign.Evaluate(b)
 	}
@@ -214,100 +234,92 @@ func (e *EqualExpr) Evaluate(b *QueryBuilder) string {
 	panic("This should not happen!")
 }
 
+type Glob struct {
+	Var   string `parser:"@Ident Glob"`
+	Value string `parser:"@String"`
+}
+
+func (e *Glob) Evaluate(b *QueryBuilder) string {
+	return b.createLeafQuery(
+		"SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value GLOB ?",
+		e.Var, e.Value,
+	)
+}
+
 type LessThan struct {
 	Var   string `parser:"@Ident Lt"`
-	Value uint64 `parser:"@Number"`
+	Value *Value `parser:"@@"`
 }
 
 func (e *LessThan) Evaluate(b *QueryBuilder) string {
-	tableName := b.nextTableName()
-	if b.needsComma {
-		b.tableBuilder.WriteString(", ")
+	if e.Value.String != nil {
+		return b.createLeafQuery(
+			"SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value < ?",
+			e.Var, *e.Value.String,
+		)
 	} else {
-		b.needsComma = true
+		return b.createLeafQuery(
+			"SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value < ?",
+			e.Var, *e.Value.Number,
+		)
 	}
-	b.tableBuilder.WriteString(tableName)
-	b.tableBuilder.WriteString(" AS (")
-	b.tableBuilder.WriteString(
-		"SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value < ?",
-	)
-	b.tableBuilder.WriteString(")")
-
-	b.args = append(b.args, e.Var, e.Value)
-
-	return tableName
 }
 
 type LessOrEqualThan struct {
 	Var   string `parser:"@Ident Leqt"`
-	Value uint64 `parser:"@Number"`
+	Value *Value `parser:"@@"`
 }
 
 func (e *LessOrEqualThan) Evaluate(b *QueryBuilder) string {
-	tableName := b.nextTableName()
-	if b.needsComma {
-		b.tableBuilder.WriteString(", ")
+	if e.Value.String != nil {
+		return b.createLeafQuery(
+			"SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value <= ?",
+			e.Var, *e.Value.String,
+		)
 	} else {
-		b.needsComma = true
+		return b.createLeafQuery(
+			"SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value <= ?",
+			e.Var, *e.Value.Number,
+		)
 	}
-	b.tableBuilder.WriteString(tableName)
-	b.tableBuilder.WriteString(" AS (")
-	b.tableBuilder.WriteString(
-		"SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value <= ?",
-	)
-	b.tableBuilder.WriteString(")")
-
-	b.args = append(b.args, e.Var, e.Value)
-
-	return tableName
 }
 
 type GreaterThan struct {
 	Var   string `parser:"@Ident Gt"`
-	Value uint64 `parser:"@Number"`
+	Value *Value `parser:"@@"`
 }
 
 func (e *GreaterThan) Evaluate(b *QueryBuilder) string {
-	tableName := b.nextTableName()
-	if b.needsComma {
-		b.tableBuilder.WriteString(", ")
+	if e.Value.String != nil {
+		return b.createLeafQuery(
+			"SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value > ?",
+			e.Var, *e.Value.String,
+		)
 	} else {
-		b.needsComma = true
+		return b.createLeafQuery(
+			"SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value > ?",
+			e.Var, *e.Value.Number,
+		)
 	}
-	b.tableBuilder.WriteString(tableName)
-	b.tableBuilder.WriteString(" AS (")
-	b.tableBuilder.WriteString(
-		"SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value > ?",
-	)
-	b.tableBuilder.WriteString(")")
-
-	b.args = append(b.args, e.Var, e.Value)
-
-	return tableName
 }
 
 type GreaterOrEqualThan struct {
 	Var   string `parser:"@Ident Geqt"`
-	Value uint64 `parser:"@Number"`
+	Value *Value `parser:"@@"`
 }
 
 func (e *GreaterOrEqualThan) Evaluate(b *QueryBuilder) string {
-	tableName := b.nextTableName()
-	if b.needsComma {
-		b.tableBuilder.WriteString(", ")
+	if e.Value.String != nil {
+		return b.createLeafQuery(
+			"SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value >= ?",
+			e.Var, *e.Value.String,
+		)
 	} else {
-		b.needsComma = true
+		return b.createLeafQuery(
+			"SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value >= ?",
+			e.Var, *e.Value.Number,
+		)
 	}
-	b.tableBuilder.WriteString(tableName)
-	b.tableBuilder.WriteString(" AS (")
-	b.tableBuilder.WriteString(
-		"SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value >= ?",
-	)
-	b.tableBuilder.WriteString(")")
-
-	b.args = append(b.args, e.Var, e.Value)
-
-	return tableName
 }
 
 // Ownership represents an ownership query, $owner = 0x....
@@ -320,22 +332,10 @@ func (e *Ownership) Evaluate(b *QueryBuilder) string {
 	if common.IsHexAddress(e.Owner) {
 		address = common.HexToAddress(e.Owner)
 	}
-	tableName := b.nextTableName()
-	if b.needsComma {
-		b.tableBuilder.WriteString(", ")
-	} else {
-		b.needsComma = true
-	}
-	b.tableBuilder.WriteString(tableName)
-	b.tableBuilder.WriteString(" AS (")
-	b.tableBuilder.WriteString(
+	return b.createLeafQuery(
 		"SELECT key FROM entities WHERE owner_address = ?",
+		address.Hex(),
 	)
-	b.tableBuilder.WriteString(")")
-
-	b.args = append(b.args, address.Hex())
-
-	return tableName
 }
 
 // Equality represents a simple equality (e.g. name = 123).
@@ -345,30 +345,17 @@ type Equality struct {
 }
 
 func (e *Equality) Evaluate(b *QueryBuilder) string {
-	tableName := b.nextTableName()
-	if b.needsComma {
-		b.tableBuilder.WriteString(", ")
-	} else {
-		b.needsComma = true
-	}
-	b.tableBuilder.WriteString(tableName)
-	b.tableBuilder.WriteString(" AS (")
-
 	if e.Value.String != nil {
-		b.tableBuilder.WriteString(
+		return b.createLeafQuery(
 			"SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?",
+			e.Var, *e.Value.String,
 		)
-		b.args = append(b.args, e.Var, *e.Value.String)
 	} else {
-		b.tableBuilder.WriteString(
+		return b.createLeafQuery(
 			"SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?",
+			e.Var, *e.Value.Number,
 		)
-		b.args = append(b.args, e.Var, *e.Value.Number)
 	}
-
-	b.tableBuilder.WriteString(")")
-
-	return tableName
 }
 
 // Value is a literal value (a number or a string).

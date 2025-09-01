@@ -79,7 +79,7 @@ func NewStore(dbFile string) (*SQLStore, error) {
 	ctx := context.Background()
 	var tableName string
 	err = db.QueryRowContext(ctx, `
-		SELECT name FROM sqlite_master 
+		SELECT name FROM sqlite_master
 		WHERE type='table' AND name='entities';
 	`).Scan(&tableName)
 
@@ -600,10 +600,7 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 }
 
 func (e *SQLStore) QueryEntities(ctx context.Context, query string, args ...any) ([]common.Hash, error) {
-
-	log.Info(fmt.Sprintf("Query engine, executing query: %s\n", query))
-	log.Info(fmt.Sprintf("Query engine, number of args: %d\n", len(args)))
-	log.Info(fmt.Sprintf("Query engine, args: %v\n", args))
+	log.Info("Executing query", "query", query, "args", args)
 
 	rows, err := e.db.QueryContext(ctx, query, args...)
 	if err != nil {

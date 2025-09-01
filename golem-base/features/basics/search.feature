@@ -44,3 +44,65 @@ Feature: Search
     Given I have created an entity
     When I search for entities of an owner
     Then I should find 1 entity
+
+  Scenario: finding multiple entities with a numeric range query
+    Given I have an entity "e1" with numeric annotations:
+      | foo | 5 |
+    And I have an entity "e2" with numeric annotations:
+      | foo | 50 |
+    And I have an entity "e3" with numeric annotations:
+      | foo | 60 |
+    And I have an entity "e4" with numeric annotations:
+      | foo | 3 |
+    And I have an entity "e5" with numeric annotations:
+      | foo | 2 |
+    When I search for entities with the query
+      """
+      foo <= 50 && foo > 3
+      """
+    Then I should find 2 entities
+
+  Scenario: finding multiple entities with a glob query
+    Given I have an entity "e1" with string annotations:
+      | foo | bar |
+    And I have an entity "e2" with string annotations:
+      | foo | foobarquz |
+    And I have an entity "e3" with string annotations:
+      | foo | fooborquz |
+    When I search for entities with the query
+      """
+      foo ~ "*b?r*"
+      """
+    Then I should find 3 entities
+
+  Scenario: finding multiple entities with a glob query (bis)
+    Given I have an entity "e1" with string annotations:
+      | foo | bar |
+    And I have an entity "e2" with string annotations:
+      | foo | foobarquz |
+    And I have an entity "e3" with string annotations:
+      | foo | fooborquz |
+    And I have an entity "e4" with string annotations:
+      | foo | bor |
+    When I search for entities with the query
+      """
+      foo ~ "b?r"
+      """
+    Then I should find 2 entities
+
+  Scenario: finding multiple entities with a string range query
+    Given I have an entity "e1" with string annotations:
+      | foo | bar |
+    And I have an entity "e2" with string annotations:
+      | foo | foobarquz |
+    And I have an entity "e3" with string annotations:
+      | foo | fooborquz |
+    And I have an entity "e4" with string annotations:
+      | foo | bor |
+    And I have an entity "e5" with string annotations:
+      | foo | a |
+    When I search for entities with the query
+      """
+      foo <= "bor"
+      """
+    Then I should find 3 entities
