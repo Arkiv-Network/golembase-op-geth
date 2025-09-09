@@ -23,43 +23,56 @@
     {
       packages = eachSystem (
         _system: pkgs:
-        let
-          inherit (pkgs) lib;
-        in
-        {
-          default = pkgs.buildGoModule {
-            name = "gb-op-geth";
+          let
+            inherit (pkgs) lib;
+          in
+          {
+            default = pkgs.buildGoModule {
+              name = "gb-op-geth";
 
-            src = ./.;
+              src = ./.;
 
-            subPackages = [
-              "cmd/abidump"
-              "cmd/abigen"
-              "cmd/clef"
-              "cmd/devp2p"
-              "cmd/ethkey"
-              "cmd/evm"
-              "cmd/geth"
-              "cmd/rlpdump"
-              "cmd/utils"
-            ];
+              subPackages = [
+                "cmd/abidump"
+                "cmd/abigen"
+                "cmd/clef"
+                "cmd/devp2p"
+                "cmd/ethkey"
+                "cmd/evm"
+                "cmd/geth"
+                "cmd/rlpdump"
+                "cmd/utils"
+              ];
 
-            proxyVendor = true;
-            vendorHash = "sha256-+xBV3MAKpTJoscliPQssC6na9DTF0VO43AUlNpadVO4=";
+              proxyVendor = true;
+              vendorHash = "sha256-Uj0CIeCDjs1ARpqXmjDUUz+0lvlmAFpQulFZfmKH/+Y=";
 
-            ldflags = [
-              "-s"
-              "-w"
-            ];
+              ldflags = [
+                "-s"
+                "-w"
+              ];
 
-            meta = with lib; {
-              description = "";
-              homepage = "https://github.com/Golem-Base/op-geth";
-              license = licenses.gpl3Only;
-              mainProgram = "geth";
+              meta = with lib; {
+                description = "";
+                homepage = "https://github.com/Golem-Base/golembase-op-geth";
+                license = licenses.gpl3Only;
+                mainProgram = "geth";
+              };
             };
-          };
-        }
+
+            golembase-cli = pkgs.buildGoModule {
+              name = "golembase";
+              src = ./.;
+              subPackages = [ "cmd/golembase" ];
+              vendorHash = "sha256-n5JidCrpnqisDRnnT+eAAG7Nof1P3vcDaEs3/WbeqH0=";
+              meta = with lib; {
+                description = "golembase CLI - Golem Base";
+                homepage = "https://github.com/Golem-Base/golembase-op-geth";
+                license = licenses.gpl3Only;
+                mainProgram = "golembase";
+              };
+            };
+          }
       );
 
       devShells = eachSystem (
