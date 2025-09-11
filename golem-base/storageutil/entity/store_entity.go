@@ -7,10 +7,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/allentities"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/annotationindex"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entitiesofowner"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entityexpiration"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
 )
 
 // This regex should not allow $ as the first character, since we use that for
@@ -47,28 +45,6 @@ func Store(
 	err = entityexpiration.AddToEntitiesToExpireAtBlock(access, emd.ExpiresAtBlock, key)
 	if err != nil {
 		return fmt.Errorf("failed to add entity to entities to expire: %w", err)
-	}
-
-	for _, stringAnnotation := range emd.StringAnnotations {
-		err = keyset.AddValue(
-			access,
-			annotationindex.StringAnnotationIndexKey(stringAnnotation.Key, stringAnnotation.Value),
-			key,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to append to key list: %w", err)
-		}
-	}
-
-	for _, numericAnnotation := range emd.NumericAnnotations {
-		err = keyset.AddValue(
-			access,
-			annotationindex.NumericAnnotationIndexKey(numericAnnotation.Key, numericAnnotation.Value),
-			key,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to append to key list: %w", err)
-		}
 	}
 
 	StorePayload(access, key, payload)
