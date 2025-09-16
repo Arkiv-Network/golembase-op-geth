@@ -335,7 +335,7 @@ func (q *Queries) GetEntityKeysByOwner(ctx context.Context, ownerAddress string)
 }
 
 const getEntityMetadata = `-- name: GetEntityMetadata :one
-SELECT 
+SELECT
   expires_at,
   owner_address,
     payload,
@@ -367,7 +367,7 @@ func (q *Queries) GetEntityMetadata(ctx context.Context, key string) (GetEntityM
 }
 
 const getEntityNumericAnnotations = `-- name: GetEntityNumericAnnotations :many
-SELECT 
+SELECT
   annotation_key,
   value
 FROM numeric_annotations
@@ -415,7 +415,7 @@ func (q *Queries) GetEntityPayload(ctx context.Context, key string) ([]byte, err
 }
 
 const getEntityStringAnnotations = `-- name: GetEntityStringAnnotations :many
-SELECT 
+SELECT
   annotation_key,
   value
 FROM string_annotations
@@ -543,16 +543,18 @@ func (q *Queries) HasProcessingStatus(ctx context.Context, network string) (bool
 }
 
 const insertEntity = `-- name: InsertEntity :exec
-INSERT INTO entities (key, expires_at, payload, owner_address, created_at_block, last_modified_at_block) VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO entities (key, expires_at, payload, owner_address, created_at_block, last_modified_at_block, transaction_index_in_block, operation_index_in_transaction) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertEntityParams struct {
-	Key                 string
-	ExpiresAt           int64
-	Payload             []byte
-	OwnerAddress        string
-	CreatedAtBlock      int64
-	LastModifiedAtBlock int64
+	Key                         string
+	ExpiresAt                   int64
+	Payload                     []byte
+	OwnerAddress                string
+	CreatedAtBlock              int64
+	LastModifiedAtBlock         int64
+	TransactionIndexInBlock     int64
+	OperationIndexInTransaction int64
 }
 
 func (q *Queries) InsertEntity(ctx context.Context, arg InsertEntityParams) error {
@@ -563,6 +565,8 @@ func (q *Queries) InsertEntity(ctx context.Context, arg InsertEntityParams) erro
 		arg.OwnerAddress,
 		arg.CreatedAtBlock,
 		arg.LastModifiedAtBlock,
+		arg.TransactionIndexInBlock,
+		arg.OperationIndexInTransaction,
 	)
 	return err
 }

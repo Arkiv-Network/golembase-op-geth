@@ -5,7 +5,7 @@ package entity
 import "github.com/ethereum/go-ethereum/rlp"
 import "io"
 
-func (obj *EntityMetaData) EncodeRLP(_w io.Writer) error {
+func (obj *EncodableEntityMetaData) EncodeRLP(_w io.Writer) error {
 	w := rlp.NewEncoderBuffer(_w)
 	_tmp0 := w.List()
 	w.WriteUint64(obj.ExpiresAtBlock)
@@ -26,6 +26,7 @@ func (obj *EntityMetaData) EncodeRLP(_w io.Writer) error {
 	}
 	w.ListEnd(_tmp4)
 	w.WriteBytes(obj.Owner[:])
+	w.WriteUint256(&obj.BlockInfo)
 	w.ListEnd(_tmp0)
 	return w.Flush()
 }

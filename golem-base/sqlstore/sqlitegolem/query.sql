@@ -1,5 +1,5 @@
 -- name: InsertEntity :exec
-INSERT INTO entities (key, expires_at, payload, owner_address, created_at_block, last_modified_at_block) VALUES (?, ?, ?, ?, ?, ?);
+INSERT INTO entities (key, expires_at, payload, owner_address, created_at_block, last_modified_at_block, transaction_index_in_block, operation_index_in_transaction) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: InsertStringAnnotation :exec
 INSERT INTO string_annotations (entity_key, annotation_key, value) VALUES (?, ?, ?);
@@ -77,7 +77,7 @@ DELETE FROM numeric_annotations;
 DELETE FROM processing_status;
 
 -- name: GetEntityMetadata :one
-SELECT 
+SELECT
   expires_at,
   owner_address,
     payload,
@@ -87,7 +87,7 @@ FROM entities
 WHERE key = ?;
 
 -- name: GetEntityStringAnnotations :many
-SELECT 
+SELECT
   annotation_key,
   value
 FROM string_annotations
@@ -95,7 +95,7 @@ WHERE entity_key = ?
 ORDER BY annotation_key;
 
 -- name: GetEntityNumericAnnotations :many
-SELECT 
+SELECT
   annotation_key,
   value
 FROM numeric_annotations

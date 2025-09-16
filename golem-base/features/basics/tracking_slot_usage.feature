@@ -8,7 +8,7 @@ Feature: Tracking slot usage
   Scenario: Adding an entity
     Given I have created an entity
     When I get the number of used slots
-    Then the number of used slots should be 13
+    Then the number of used slots should be 14
 
   Scenario: Deleting an entity
     Given I have created an entity

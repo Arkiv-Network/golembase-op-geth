@@ -226,7 +226,7 @@ func TestStorageTransactionValidation(t *testing.T) {
 
 		err := tx.Validate()
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "Invalid annotation identifier")
+		assert.Contains(t, err.Error(), "invalid annotation identifier")
 	})
 
 	t.Run("DuplicateStringAnnotationKey", func(t *testing.T) {

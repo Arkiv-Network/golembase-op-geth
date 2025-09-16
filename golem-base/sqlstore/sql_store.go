@@ -41,6 +41,8 @@ type Create struct {
 	StringAnnotations  []entity.StringAnnotation  `json:"stringAnnotations"`
 	NumericAnnotations []entity.NumericAnnotation `json:"numericAnnotations"`
 	Owner              common.Address             `json:"owner"`
+	TransactionIndex   uint64                     `json:"txIndex"`
+	OperationIndex     uint64                     `json:"opIndex"`
 }
 
 type Update struct {
@@ -49,6 +51,8 @@ type Update struct {
 	Payload            []byte                     `json:"payload"`
 	StringAnnotations  []entity.StringAnnotation  `json:"stringAnnotations"`
 	NumericAnnotations []entity.NumericAnnotation `json:"numericAnnotations"`
+	TransactionIndex   uint64                     `json:"txIndex"`
+	OperationIndex     uint64                     `json:"opIndex"`
 }
 
 type ExtendBTL struct {
@@ -367,12 +371,14 @@ func (e *SQLStore) SnapSyncToBlock(
 
 		// Insert the entity
 		err = txDB.InsertEntity(ctx, sqlitegolem.InsertEntityParams{
-			Key:                 entity.Key.Hex(),
-			ExpiresAt:           int64(entity.Metadata.ExpiresAtBlock),
-			Payload:             entity.Payload,
-			OwnerAddress:        entity.Metadata.Owner.Hex(),
-			CreatedAtBlock:      int64(blockNumber),
-			LastModifiedAtBlock: int64(blockNumber),
+			Key:                         entity.Key.Hex(),
+			ExpiresAt:                   int64(entity.Metadata.ExpiresAtBlock),
+			Payload:                     entity.Payload,
+			OwnerAddress:                entity.Metadata.Owner.Hex(),
+			CreatedAtBlock:              int64(entity.Metadata.CreatedAtBlock),
+			LastModifiedAtBlock:         int64(entity.Metadata.LastModifiedAtBlock),
+			TransactionIndexInBlock:     int64(entity.Metadata.TransactionIndex),
+			OperationIndexInTransaction: int64(entity.Metadata.OperationIndex),
 		})
 		if err != nil {
 			return fmt.Errorf("failed to insert entity %s: %w", entity.Key.Hex(), err)
@@ -490,12 +496,14 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 		case op.Create != nil:
 			log.Info("create", "entity", op.Create.EntityKey.Hex())
 			err = txDB.InsertEntity(ctx, sqlitegolem.InsertEntityParams{
-				Key:                 op.Create.EntityKey.Hex(),
-				ExpiresAt:           int64(op.Create.ExpiresAtBlock),
-				Payload:             op.Create.Payload,
-				OwnerAddress:        op.Create.Owner.Hex(),
-				CreatedAtBlock:      int64(blockWal.BlockInfo.Number),
-				LastModifiedAtBlock: int64(blockWal.BlockInfo.Number),
+				Key:                         op.Create.EntityKey.Hex(),
+				ExpiresAt:                   int64(op.Create.ExpiresAtBlock),
+				Payload:                     op.Create.Payload,
+				OwnerAddress:                op.Create.Owner.Hex(),
+				CreatedAtBlock:              int64(blockWal.BlockInfo.Number),
+				LastModifiedAtBlock:         int64(blockWal.BlockInfo.Number),
+				TransactionIndexInBlock:     int64(op.Create.TransactionIndex),
+				OperationIndexInTransaction: int64(op.Create.OperationIndex),
 			})
 			if err != nil {
 				return fmt.Errorf("failed to insert entity: %w", err)
@@ -533,12 +541,14 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 			txDB.DeleteStringAnnotations(ctx, op.Update.EntityKey.Hex())
 
 			txDB.InsertEntity(ctx, sqlitegolem.InsertEntityParams{
-				Key:                 op.Update.EntityKey.Hex(),
-				ExpiresAt:           int64(op.Update.ExpiresAtBlock),
-				Payload:             op.Update.Payload,
-				OwnerAddress:        existingEntity.OwnerAddress,
-				CreatedAtBlock:      existingEntity.CreatedAtBlock,
-				LastModifiedAtBlock: int64(blockWal.BlockInfo.Number),
+				Key:                         op.Update.EntityKey.Hex(),
+				ExpiresAt:                   int64(op.Update.ExpiresAtBlock),
+				Payload:                     op.Update.Payload,
+				OwnerAddress:                existingEntity.OwnerAddress,
+				CreatedAtBlock:              existingEntity.CreatedAtBlock,
+				LastModifiedAtBlock:         int64(blockWal.BlockInfo.Number),
+				TransactionIndexInBlock:     int64(op.Update.TransactionIndex),
+				OperationIndexInTransaction: int64(op.Update.OperationIndex),
 			})
 
 			for _, annotation := range op.Update.NumericAnnotations {

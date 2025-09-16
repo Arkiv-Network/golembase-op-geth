@@ -17,9 +17,13 @@ func TestActivePayloadRLP(t *testing.T) {
 		{
 			name: "empty payload",
 			payload: entity.EntityMetaData{
-				ExpiresAtBlock:     0,
-				StringAnnotations:  []entity.StringAnnotation{},
-				NumericAnnotations: []entity.NumericAnnotation{},
+				ExpiresAtBlock:      0,
+				StringAnnotations:   []entity.StringAnnotation{},
+				NumericAnnotations:  []entity.NumericAnnotation{},
+				CreatedAtBlock:      0,
+				LastModifiedAtBlock: 0,
+				TransactionIndex:    0,
+				OperationIndex:      0,
 			},
 		},
 		{
@@ -34,6 +38,10 @@ func TestActivePayloadRLP(t *testing.T) {
 					{Key: "num1", Value: 42},
 					{Key: "num2", Value: 123},
 				},
+				CreatedAtBlock:      5,
+				LastModifiedAtBlock: 50,
+				TransactionIndex:    10,
+				OperationIndex:      20,
 			},
 		},
 	}
@@ -54,6 +62,10 @@ func TestActivePayloadRLP(t *testing.T) {
 			require.Equal(t, tt.payload.ExpiresAtBlock, decoded.ExpiresAtBlock)
 			require.Equal(t, tt.payload.StringAnnotations, decoded.StringAnnotations)
 			require.Equal(t, tt.payload.NumericAnnotations, decoded.NumericAnnotations)
+			require.Equal(t, tt.payload.CreatedAtBlock, decoded.CreatedAtBlock)
+			require.Equal(t, tt.payload.LastModifiedAtBlock, decoded.LastModifiedAtBlock)
+			require.Equal(t, tt.payload.TransactionIndex, decoded.TransactionIndex)
+			require.Equal(t, tt.payload.OperationIndex, decoded.OperationIndex)
 		})
 	}
 }

@@ -5,12 +5,14 @@
 package sqlitegolem
 
 type Entity struct {
-	Key                 string
-	ExpiresAt           int64
-	Payload             []byte
-	CreatedAtBlock      int64
-	LastModifiedAtBlock int64
-	OwnerAddress        string
+	Key                         string
+	ExpiresAt                   int64
+	Payload                     []byte
+	CreatedAtBlock              int64
+	LastModifiedAtBlock         int64
+	TransactionIndexInBlock     int64
+	OperationIndexInTransaction int64
+	OwnerAddress                string
 }
 
 type NumericAnnotation struct {

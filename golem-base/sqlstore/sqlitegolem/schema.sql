@@ -10,6 +10,8 @@ CREATE TABLE entities (
   payload BLOB NOT NULL,
   created_at_block INTEGER NOT NULL,
   last_modified_at_block INTEGER NOT NULL,
+  transaction_index_in_block INTEGER NOT NULL,
+  operation_index_in_transaction INTEGER NOT NULL,
   owner_address TEXT NOT NULL
 );
 
@@ -28,4 +30,3 @@ CREATE TABLE numeric_annotations (
   value INTEGER NOT NULL,
   PRIMARY KEY (entity_key, annotation_key)
 );
-

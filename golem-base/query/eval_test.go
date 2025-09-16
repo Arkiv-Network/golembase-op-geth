@@ -17,18 +17,14 @@ func TestEqualExpr(t *testing.T) {
 	res := expr.Evaluate()
 
 	require.Equal(t,
-<<<<<<< HEAD
 		strings.Join([]string{
 			"WITH",
 			"table_1 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?)",
-			"SELECT * FROM table_1",
+			"SELECT entity_key FROM table_1",
 			"ORDER BY 1",
 		},
 			" ",
 		),
-=======
-		"WITH table_1 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?) SELECT entity_key FROM table_1 ORDER BY 1",
->>>>>>> a938d43e5 (added block numbers to sqldb)
 		res.Query,
 	)
 
@@ -165,7 +161,7 @@ func TestOrExpr(t *testing.T) {
 			"table_1 AS (SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?),",
 			"table_2 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?),",
 			"table_3 AS (SELECT entity_key FROM table_1 UNION SELECT entity_key FROM table_2)",
-			"SELECT * FROM table_3",
+			"SELECT entity_key FROM table_3",
 			"ORDER BY 1",
 		},
 			" ",
@@ -240,7 +236,7 @@ func TestOwner(t *testing.T) {
 			"table_1 AS (SELECT entity_key FROM numeric_annotations WHERE annotation_key = ? AND value = ?),",
 			"table_2 AS (SELECT entity_key FROM string_annotations WHERE annotation_key = ? AND value = ?),",
 			"table_3 AS (SELECT entity_key FROM table_1 UNION SELECT entity_key FROM table_2),",
-			"table_4 AS (SELECT key FROM entities WHERE owner_address = ?),",
+			"table_4 AS (SELECT key AS entity_key FROM entities WHERE owner_address = ?),",
 			"table_5 AS (SELECT entity_key FROM table_3 INTERSECT SELECT entity_key FROM table_4)",
 			"SELECT entity_key FROM table_5",
 			"ORDER BY 1",
