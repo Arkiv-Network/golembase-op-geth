@@ -160,6 +160,11 @@ func WriteLogForBlockSqlite(
 				continue
 			}
 
+			// quick fix to unblock kaolin
+			if len(tx.Data()) == 0 {
+				continue
+			}
+
 			toAddr := common.Address{}
 			if tx.To() != nil {
 				toAddr = *tx.To()
