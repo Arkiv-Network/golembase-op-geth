@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/golem-base/address"
 	"github.com/ethereum/go-ethereum/golem-base/golemtype"
 	"github.com/ethereum/go-ethereum/golem-base/storagetx"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
@@ -205,6 +206,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^another create operation has valid BTL and annotations$`, anotherCreateOperationHasValidBTLAndAnnotations)
 	ctx.Step(`^the error should mention "([^"]*)" and "([^"]*)"$`, theErrorShouldMentionAnd)
 	ctx.Step(`^the error should mention the first validation error encountered$`, theErrorShouldMentionTheFirstValidationErrorEncountered)
+	ctx.Step(`^I submit a storage transaction with no playload$`, iSubmitAStorageTransactionWithNoPlayload)
+	ctx.Step(`^I submit a storage transaction with unparseable data$`, iSubmitAStorageTransactionWithUnparseableData)
 
 }
 
@@ -1778,6 +1781,34 @@ func theErrorShouldMentionTheFirstValidationErrorEncountered(ctx context.Context
 	// The first validation error should be about BTL being 0
 	if !strings.Contains(w.ValidationError.Error(), "BTL is 0") {
 		return fmt.Errorf("expected first error to be about BTL, but got: %v", w.ValidationError)
+	}
+	return nil
+}
+
+func iSubmitAStorageTransactionWithNoPlayload(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	_, err := w.SendTxWithData(
+		ctx,
+		big.NewInt(1),
+		address.GolemBaseStorageProcessorAddress,
+		nil,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to transfer: %w", err)
+	}
+	return nil
+}
+
+func iSubmitAStorageTransactionWithUnparseableData(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	_, err := w.SendTxWithData(
+		ctx,
+		big.NewInt(1),
+		address.GolemBaseStorageProcessorAddress,
+		[]byte("unparseable data"),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to transfer: %w", err)
 	}
 	return nil
 }

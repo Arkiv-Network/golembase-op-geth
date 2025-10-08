@@ -214,7 +214,7 @@ func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, 
 	}
 
 	// Apply the transaction to the current state (included in the env).
-	result, err := ApplyMessage(evm, msg, gp)
+	result, err := ApplyMessageWithIndex(evm, msg, gp, txIx)
 	if err != nil {
 		return nil, err
 	}
