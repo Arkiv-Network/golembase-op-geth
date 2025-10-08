@@ -52,6 +52,11 @@ func Load() (*UserAccount, error) {
 
 // readPassword reads a password from stdin if piped, or interactively if in a terminal
 func readPassword() (string, error) {
+	password, ok := os.LookupEnv("WALLET_PASSWORD")
+	if ok {
+		return password, nil
+	}
+
 	// Check if input is coming from a terminal
 	if term.IsTerminal(int(syscall.Stdin)) {
 
