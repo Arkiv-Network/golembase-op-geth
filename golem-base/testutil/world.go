@@ -8,7 +8,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/golem-base/arkivtype"
 	"github.com/ethereum/go-ethereum/golem-base/golemtype"
 	"github.com/ethereum/go-ethereum/golem-base/storagetx"
 )
@@ -20,7 +19,6 @@ type World struct {
 	SecondFundedAccount    *FundedAccount
 	LastReceipt            *types.Receipt
 	SearchResult           []golemtype.SearchResult
-	ArkivSearchResult      []arkivtype.SearchResult
 	CreatedEntityKey       common.Hash
 	SecondCreatedEntityKey common.Hash
 	LastError              error

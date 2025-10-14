@@ -11,7 +11,6 @@ Feature: update entity
     Given I have created an entity
     When I submit a transaction to update the entity, changing the annotations
     Then the annotations of the entity should be changed
-    And the annotations of the entity at the previous block should not be changed
 
   Scenario: updating the btl of the entity
     Given I have created an entity

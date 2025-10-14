@@ -11,8 +11,8 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entityexpiration"
 )
 
-// This regex should not allow $ or 0x as the first characters, since we use that for
-// special meta-annotations like $owner and for hashes and addresses.
+// This regex should not allow $ as the first character, since we use that for
+// special meta-annotations like $owner.
 const AnnotationIdentRegex string = `[\p{L}_][\p{L}\p{N}_]*`
 
 var AnnotationIdentRegexCompiled *regexp.Regexp = regexp.MustCompile(fmt.Sprintf("^%s$", AnnotationIdentRegex))

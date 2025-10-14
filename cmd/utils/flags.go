@@ -910,12 +910,6 @@ var (
 		Usage:    "Path to the SQL state file for the Golem Base",
 		Category: flags.MiscCategory,
 	}
-	ArkivHistoricBlocksFlag = &cli.Uint64Flag{
-		Name:     "arkiv.history.blocks",
-		Usage:    "Number of blocks to retain in the Arkiv state, 0 means full history",
-		Category: flags.MiscCategory,
-		Value:    128,
-	}
 
 	// Console
 	JSpathFlag = &flags.DirectoryFlag{
@@ -1585,10 +1579,6 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 
 	if ctx.IsSet(GolemBaseSQLStateFile.Name) {
 		cfg.GolemBaseSQLStateFile = ctx.String(GolemBaseSQLStateFile.Name)
-	}
-
-	if ctx.IsSet(ArkivHistoricBlocksFlag.Name) {
-		cfg.ArkivHistoricBlocksFlag = ctx.Uint64(ArkivHistoricBlocksFlag.Name)
 	}
 
 	// deprecation notice for log debug flags (TODO: find a more appropriate place to put these?)
@@ -2493,7 +2483,6 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	log.Info("Creating SQLStore", "path", stack.Config().GolemBaseSQLStateFile)
 	st, err := sqlstore.NewStore(
 		stack.Config().GolemBaseSQLStateFile,
-		stack.Config().ArkivHistoricBlocksFlag,
 	)
 	if err != nil {
 		Fatalf("failed to create SQLStore: %v", err)

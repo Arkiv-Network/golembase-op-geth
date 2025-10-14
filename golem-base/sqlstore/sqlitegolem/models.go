@@ -14,17 +14,15 @@ type Entity struct {
 	Payload                     []byte
 	CreatedAtBlock              int64
 	LastModifiedAtBlock         int64
-	Deleted                     bool
 	TransactionIndexInBlock     int64
 	OperationIndexInTransaction int64
 	OwnerAddress                string
 }
 
 type NumericAnnotation struct {
-	EntityKey                 string
-	EntityLastModifiedAtBlock int64
-	AnnotationKey             string
-	Value                     int64
+	EntityKey     string
+	AnnotationKey string
+	Value         int64
 }
 
 type ProcessingStatus struct {
@@ -34,13 +32,12 @@ type ProcessingStatus struct {
 }
 
 type SchemaVersion struct {
-	ID       int64
-	Entities sql.NullInt64
+	Entities    sql.NullInt64
+	Annotations sql.NullInt64
 }
 
 type StringAnnotation struct {
-	EntityKey                 string
-	EntityLastModifiedAtBlock int64
-	AnnotationKey             string
-	Value                     string
+	EntityKey     string
+	AnnotationKey string
+	Value         string
 }
