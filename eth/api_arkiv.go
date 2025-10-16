@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/golem-base/arkivtype"
 	"github.com/ethereum/go-ethereum/golem-base/query"
@@ -143,16 +142,6 @@ func (api *arkivAPI) GetEntityCount(ctx context.Context) (uint64, error) {
 	return count, nil
 }
 
-// GetAllEntityKeys returns all entity keys in the storage.
-func (api *arkivAPI) GetAllEntityKeys(ctx context.Context) ([]common.Hash, error) {
-	entities, err := api.store.GetAllEntityKeys(ctx, api.eth.blockchain.CurrentBlock().Number.Uint64())
-	if err != nil {
-		return nil, err
-	}
-
-	return entities, nil
-}
-
 func (api *arkivAPI) GetNumberOfUsedSlots() (*hexutil.Big, error) {
 	header := api.eth.blockchain.CurrentBlock()
 	stateDB, err := api.eth.BlockChain().StateAt(header.Root)
@@ -164,4 +153,24 @@ func (api *arkivAPI) GetNumberOfUsedSlots() (*hexutil.Big, error) {
 	counterAsBigInt := big.NewInt(0)
 	counter.IntoBig(&counterAsBigInt)
 	return (*hexutil.Big)(counterAsBigInt), nil
+}
+
+type BlockTiming struct {
+	CurrentBlock     uint64 `json:"current_block"`
+	CurrentBlockTime uint64 `json:"current_block_time"`
+	BlockDuration    uint64 `json:"duration"`
+}
+
+func (api *arkivAPI) GetBlockTiming(ctx context.Context) (*BlockTiming, error) {
+	header := api.eth.blockchain.CurrentHeader()
+	previousHeader := api.eth.blockchain.GetHeaderByHash(header.ParentHash)
+	if previousHeader == nil {
+		return nil, fmt.Errorf("failed to get previous header")
+	}
+
+	return &BlockTiming{
+		CurrentBlock:     header.Number.Uint64(),
+		CurrentBlockTime: header.Time,
+		BlockDuration:    header.Time - previousHeader.Time,
+	}, nil
 }

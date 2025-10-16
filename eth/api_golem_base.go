@@ -44,6 +44,16 @@ func (api *golemBaseAPI) GetStorageValue(ctx context.Context, key common.Hash) (
 	return []byte(entities.Data[0].Value), nil
 }
 
+// GetAllEntityKeys returns all entity keys in the storage.
+func (api *golemBaseAPI) GetAllEntityKeys(ctx context.Context) ([]common.Hash, error) {
+	entities, err := api.store.GetAllEntityKeys(ctx, api.eth.blockchain.CurrentBlock().Number.Uint64())
+	if err != nil {
+		return nil, err
+	}
+
+	return entities, nil
+}
+
 func (api *golemBaseAPI) GetEntityMetaData(ctx context.Context, key common.Hash) (*entity.EntityMetaData, error) {
 	rows, err := api.arkivAPI.Query(
 		ctx,
