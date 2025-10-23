@@ -2,7 +2,7 @@
 
 This is part of the [Golem Base](https://github.com/Golem-Base) project, which is a Layer2 Network deployed on Ethereum, acting as a gateway to various Layer 3 Database Chains (DB-Chains).
 
-> **For an overview of Golem Base, check out our [Litepaper](https://golem-base.io/wp-content/uploads/2025/03/GolemBase-Litepaper.pdf).**
+> **For an overview of Golem Base, check out our [Litepaper](https://arkiv.network/pdf/ARKIV_Litepaper_blue.pdf).**
 
 **Note:** Golem op-geth is a fork of [Ethereum Optimism's op-geth](https://github.com/ethereum-optimism/op-geth), originally based on the Go Ethereum codebase.
 
