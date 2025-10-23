@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS entities (
   key TEXT NOT NULL,
   expires_at INTEGER NOT NULL,
   payload BLOB NOT NULL,
+  content_type TEXT NOT NULL,
   created_at_block INTEGER NOT NULL,
   last_modified_at_block INTEGER NOT NULL,
   deleted BOOLEAN NOT NULL,

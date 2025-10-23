@@ -3,6 +3,7 @@ package storageaccounting
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/golem-base/address"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
 	"github.com/holiman/uint256"
 )
@@ -52,16 +53,16 @@ func (c *SlotUsageCounter) SetState(address common.Address, key common.Hash, val
 
 func (c *SlotUsageCounter) UpdateUsedSlotsForGolemBase() {
 	storedSlotsCounter := uint256.NewInt(0)
-	storedSlotsCounter.SetBytes32(c.stateAccess.GetState(storageutil.GolemDBAddress, UsedSlotsKey).Bytes())
+	storedSlotsCounter.SetBytes32(c.stateAccess.GetState(address.ArkivProcessorAddress, UsedSlotsKey).Bytes())
 
-	counter := c.UsedSlots[storageutil.GolemDBAddress]
+	counter := c.UsedSlots[address.ArkivProcessorAddress]
 	if counter == nil {
 		counter = uint256.NewInt(0)
-		c.UsedSlots[storageutil.GolemDBAddress] = counter
+		c.UsedSlots[address.ArkivProcessorAddress] = counter
 	}
 
 	storedSlotsCounter.Add(storedSlotsCounter, counter)
 
-	c.stateAccess.SetState(storageutil.GolemDBAddress, UsedSlotsKey, storedSlotsCounter.Bytes32())
+	c.stateAccess.SetState(address.ArkivProcessorAddress, UsedSlotsKey, storedSlotsCounter.Bytes32())
 	counter.SetUint64(0)
 }

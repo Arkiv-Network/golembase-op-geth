@@ -12,6 +12,7 @@ type Entity struct {
 	Key                         string
 	ExpiresAt                   int64
 	Payload                     []byte
+	ContentType                 string
 	CreatedAtBlock              int64
 	LastModifiedAtBlock         int64
 	Deleted                     bool

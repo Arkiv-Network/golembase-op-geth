@@ -8,6 +8,7 @@ import "io"
 func (obj *EntityMetaData) EncodeRLP(_w io.Writer) error {
 	w := rlp.NewEncoderBuffer(_w)
 	_tmp0 := w.List()
+	w.WriteString(obj.ContentType)
 	w.WriteUint64(obj.ExpiresAtBlock)
 	_tmp1 := w.List()
 	for _, _tmp2 := range obj.StringAnnotations {

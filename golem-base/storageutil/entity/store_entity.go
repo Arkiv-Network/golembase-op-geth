@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/allentities"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entityexpiration"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // This regex should not allow $ or 0x as the first characters, since we use that for
@@ -31,6 +32,7 @@ func Store(
 		return fmt.Errorf("failed to add entity to all entities: %w", err)
 	}
 
+	log.Info("storing entity metadata", "key", key.Hex(), "metadata", emd)
 	err = StoreEntityMetaData(access, key, emd)
 	if err != nil {
 		return fmt.Errorf("failed to store entity meta data: %w", err)

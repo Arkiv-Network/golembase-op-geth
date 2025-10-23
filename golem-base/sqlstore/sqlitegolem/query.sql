@@ -1,11 +1,11 @@
 -- name: InsertEntity :exec
 INSERT INTO entities (
-  key, expires_at, payload, owner_address,
+  key, expires_at, payload, content_type, owner_address,
   created_at_block, last_modified_at_block, deleted,
   transaction_index_in_block, operation_index_in_transaction
 )
 VALUES (
-  ?, ?, ?, ?,
+  ?, ?, ?, ?, ?,
   ?, ?, ?,
   ?, ?
 );
@@ -75,7 +75,7 @@ WHERE a.entity_key = ?1;
 
 -- name: DeleteEntity :exec
 INSERT INTO entities (
-  key, expires_at, payload, owner_address,
+  key, expires_at, payload, content_type, owner_address,
   created_at_block, last_modified_at_block, deleted,
   transaction_index_in_block, operation_index_in_transaction
 )
@@ -83,6 +83,7 @@ SELECT
     e.key,
     e.expires_at,
     e.payload,
+    e.content_type,
     e.owner_address,
     e.created_at_block,
     sqlc.arg(last_modified_at_block) AS last_modified_at_block,
@@ -99,9 +100,36 @@ AND NOT EXISTS (
   AND e2.last_modified_at_block > e.last_modified_at_block
 );
 
+-- name: UpdateEntityOwner :exec
+INSERT INTO entities (
+  key, expires_at, payload, content_type, owner_address,
+  created_at_block, last_modified_at_block, deleted,
+  transaction_index_in_block, operation_index_in_transaction
+)
+SELECT
+    e.key,
+    e.expires_at,
+    e.payload,
+    e.content_type,
+    sqlc.arg(owner_address),
+    e.created_at_block,
+    sqlc.arg(last_modified_at_block) AS last_modified_at_block,
+    e.deleted,
+    sqlc.arg(transaction_index_in_block) AS transaction_index_in_block,
+    sqlc.arg(operation_index_in_transaction) AS operation_index_in_transaction
+FROM entities AS e
+WHERE e.key = sqlc.arg(key)
+AND e.deleted = FALSE
+AND NOT EXISTS (
+  SELECT 1
+  FROM entities AS e2
+  WHERE e2.key = e.key
+  AND e2.last_modified_at_block > e.last_modified_at_block
+);
+
 -- name: UpdateEntityExpiresAt :exec
 INSERT INTO entities (
-  key, expires_at, payload, owner_address,
+  key, expires_at, payload, content_type, owner_address,
   created_at_block, last_modified_at_block, deleted,
   transaction_index_in_block, operation_index_in_transaction
 )
@@ -109,6 +137,7 @@ SELECT
     e.key,
     sqlc.arg(expires_at) AS expires_at,
     e.payload,
+    e.content_type,
     e.owner_address,
     e.created_at_block,
     sqlc.arg(last_modified_at_block) AS last_modified_at_block,

@@ -1,4 +1,3 @@
-
 Feature: update entity
 
   Scenario: updating the payload of the entity

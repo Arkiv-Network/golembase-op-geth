@@ -179,7 +179,7 @@ func (api *golemBaseAPI) GetEntitiesForNumericAnnotationValue(ctx context.Contex
 }
 
 func (api *golemBaseAPI) QueryEntities(ctx context.Context, req string) ([]golemtype.SearchResult, error) {
-	entities, err := api.arkivAPI.Query(ctx, req, &QueryOptions{
+	entities, err := api.Query(ctx, req, &QueryOptions{
 		IncludeData: &IncludeData{
 			Key:     true,
 			Payload: true,

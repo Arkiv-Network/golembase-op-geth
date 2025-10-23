@@ -17,6 +17,7 @@ import (
 var ALLCOLUMNS map[string]string = map[string]string{
 	"key":                            "key",
 	"payload":                        "payload",
+	"content_type":                   "content_type",
 	"expires_at":                     "expires_at",
 	"owner_address":                  "owner_address",
 	"last_modified_at_block":         "last_modified_at_block",

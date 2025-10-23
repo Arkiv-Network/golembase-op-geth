@@ -1589,6 +1589,8 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 
 	if ctx.IsSet(ArkivHistoricBlocksFlag.Name) {
 		cfg.ArkivHistoricBlocksFlag = ctx.Uint64(ArkivHistoricBlocksFlag.Name)
+	} else {
+		cfg.ArkivHistoricBlocksFlag = ArkivHistoricBlocksFlag.Value
 	}
 
 	// deprecation notice for log debug flags (TODO: find a more appropriate place to put these?)

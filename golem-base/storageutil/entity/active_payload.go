@@ -12,6 +12,7 @@ import (
 // The Key of the entity is derived from the payload content and the transaction hash where the entity was created.
 
 type EntityMetaData struct {
+	ContentType         string              `json:"contentType"`
 	ExpiresAtBlock      uint64              `json:"expiresAtBlock"`
 	StringAnnotations   []StringAnnotation  `json:"stringAnnotations"`
 	NumericAnnotations  []NumericAnnotation `json:"numericAnnotations"`

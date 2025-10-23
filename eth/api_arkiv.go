@@ -17,6 +17,7 @@ type IncludeData struct {
 	Key         bool `json:"key"`
 	Annotations bool `json:"annotations"`
 	Payload     bool `json:"payload"`
+	ContentType bool `json:"contentType"`
 	Expiration  bool `json:"expiration"`
 	Owner       bool `json:"owner"`
 }
@@ -33,6 +34,7 @@ var allColumns = []string{
 	query.GetColumnOrPanic("expires_at"),
 	query.GetColumnOrPanic("owner_address"),
 	query.GetColumnOrPanic("payload"),
+	query.GetColumnOrPanic("content_type"),
 }
 
 func verifyColumn(column string) (string, error) {
@@ -93,6 +95,9 @@ func (options *QueryOptions) toInternalQueryOptions() (*internalQueryOptions, er
 		}
 		if options.IncludeData.Payload {
 			iq.Columns = append(iq.Columns, query.GetColumnOrPanic("payload"))
+		}
+		if options.IncludeData.ContentType {
+			iq.Columns = append(iq.Columns, query.GetColumnOrPanic("content_type"))
 		}
 		if options.IncludeData.Expiration {
 			iq.Columns = append(iq.Columns, query.GetColumnOrPanic("expires_at"))

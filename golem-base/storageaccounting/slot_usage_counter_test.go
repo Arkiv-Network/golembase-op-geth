@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil"
+	"github.com/ethereum/go-ethereum/golem-base/address"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 )
@@ -172,22 +172,22 @@ func TestSlotUsageCounter_UpdateUsedSlotsForGolemBase(t *testing.T) {
 
 	// Set up initial stored counter value
 	initialStoredValue := uint256.NewInt(10)
-	mockAccess.SetState(storageutil.GolemDBAddress, UsedSlotsKey, initialStoredValue.Bytes32())
+	mockAccess.SetState(address.ArkivProcessorAddress, UsedSlotsKey, initialStoredValue.Bytes32())
 
 	// Add some usage to the counter
-	counter.UsedSlots[storageutil.GolemDBAddress] = uint256.NewInt(5)
+	counter.UsedSlots[address.ArkivProcessorAddress] = uint256.NewInt(5)
 
 	counter.UpdateUsedSlotsForGolemBase()
 
 	// Should have updated the stored value (10 + 5 = 15)
 	expectedTotal := uint256.NewInt(15)
-	storedValue := mockAccess.GetState(storageutil.GolemDBAddress, UsedSlotsKey)
+	storedValue := mockAccess.GetState(address.ArkivProcessorAddress, UsedSlotsKey)
 	storedInt := uint256.NewInt(0)
 	storedInt.SetBytes32(storedValue.Bytes())
 	require.Equal(t, expectedTotal, storedInt)
 
 	// Counter should be cleared
-	usedSlots := counter.UsedSlots[storageutil.GolemDBAddress]
+	usedSlots := counter.UsedSlots[address.ArkivProcessorAddress]
 	require.NotNil(t, usedSlots)
 	require.True(t, usedSlots.IsZero(), "Counter should be zero after being cleared")
 }
@@ -197,19 +197,19 @@ func TestSlotUsageCounter_UpdateUsedSlotsForGolemBase_NoInitialValue(t *testing.
 	counter := NewSlotUsageCounter(mockAccess)
 
 	// Add some usage to the counter (no initial stored value)
-	counter.UsedSlots[storageutil.GolemDBAddress] = uint256.NewInt(3)
+	counter.UsedSlots[address.ArkivProcessorAddress] = uint256.NewInt(3)
 
 	counter.UpdateUsedSlotsForGolemBase()
 
 	// Should have stored the counter value (0 + 3 = 3)
 	expectedTotal := uint256.NewInt(3)
-	storedValue := mockAccess.GetState(storageutil.GolemDBAddress, UsedSlotsKey)
+	storedValue := mockAccess.GetState(address.ArkivProcessorAddress, UsedSlotsKey)
 	storedInt := uint256.NewInt(0)
 	storedInt.SetBytes32(storedValue.Bytes())
 	require.Equal(t, expectedTotal, storedInt)
 
 	// Counter should be cleared
-	usedSlots := counter.UsedSlots[storageutil.GolemDBAddress]
+	usedSlots := counter.UsedSlots[address.ArkivProcessorAddress]
 	require.NotNil(t, usedSlots)
 	require.True(t, usedSlots.IsZero(), "Counter should be zero after being cleared")
 }
@@ -220,19 +220,19 @@ func TestSlotUsageCounter_UpdateUsedSlotsForGolemBase_NoCounter(t *testing.T) {
 
 	// Set up initial stored counter value
 	initialStoredValue := uint256.NewInt(7)
-	mockAccess.SetState(storageutil.GolemDBAddress, UsedSlotsKey, initialStoredValue.Bytes32())
+	mockAccess.SetState(address.ArkivProcessorAddress, UsedSlotsKey, initialStoredValue.Bytes32())
 
 	// No counter entry for golem address
 	counter.UpdateUsedSlotsForGolemBase()
 
 	// Should keep the initial stored value (7 + 0 = 7)
-	storedValue := mockAccess.GetState(storageutil.GolemDBAddress, UsedSlotsKey)
+	storedValue := mockAccess.GetState(address.ArkivProcessorAddress, UsedSlotsKey)
 	storedInt := uint256.NewInt(0)
 	storedInt.SetBytes32(storedValue.Bytes())
 	require.Equal(t, initialStoredValue, storedInt)
 
 	// Counter should be created and cleared
-	usedSlots := counter.UsedSlots[storageutil.GolemDBAddress]
+	usedSlots := counter.UsedSlots[address.ArkivProcessorAddress]
 	require.NotNil(t, usedSlots)
 	require.Equal(t, uint256.NewInt(0), usedSlots)
 }

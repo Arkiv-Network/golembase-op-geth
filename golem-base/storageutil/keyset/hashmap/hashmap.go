@@ -3,6 +3,7 @@ package hashmap
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/golem-base/address"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
 )
 
@@ -21,10 +22,10 @@ func NewMap(db storageutil.StateAccess, salts ...[]byte) *Map {
 
 func (m *Map) Get(key common.Hash) common.Hash {
 	hash := crypto.Keccak256Hash(m.salt, key.Bytes())
-	return m.db.GetState(storageutil.GolemDBAddress, hash)
+	return m.db.GetState(address.ArkivProcessorAddress, hash)
 }
 
 func (m *Map) Set(key common.Hash, value common.Hash) {
 	hash := crypto.Keccak256Hash(m.salt, key.Bytes())
-	m.db.SetState(storageutil.GolemDBAddress, hash, value)
+	m.db.SetState(address.ArkivProcessorAddress, hash, value)
 }

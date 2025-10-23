@@ -19,7 +19,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const entitiesSchemaVersion = uint64(2)
+const entitiesSchemaVersion = uint64(3)
 
 type BlockWal struct {
 	BlockInfo  BlockInfo
@@ -32,16 +32,18 @@ type BlockInfo struct {
 }
 
 type Operation struct {
-	Create *Create    `json:"create,omitempty"`
-	Update *Update    `json:"update,omitempty"`
-	Delete *Delete    `json:"delete,omitempty"`
-	Extend *ExtendBTL `json:"extend,omitempty"`
+	Create      *Create      `json:"create,omitempty"`
+	Update      *Update      `json:"update,omitempty"`
+	ChangeOwner *ChangeOwner `json:"changeOwner,omitempty"`
+	Delete      *Delete      `json:"delete,omitempty"`
+	Extend      *ExtendBTL   `json:"extend,omitempty"`
 }
 
 type Create struct {
 	EntityKey          common.Hash                `json:"entityKey"`
 	ExpiresAtBlock     uint64                     `json:"expiresAtBlock"`
 	Payload            []byte                     `json:"payload"`
+	ContentType        string                     `json:"contentType"`
 	StringAnnotations  []entity.StringAnnotation  `json:"stringAnnotations"`
 	NumericAnnotations []entity.NumericAnnotation `json:"numericAnnotations"`
 	Owner              common.Address             `json:"owner"`
@@ -53,10 +55,18 @@ type Update struct {
 	EntityKey          common.Hash                `json:"entityKey"`
 	ExpiresAtBlock     uint64                     `json:"expiresAtBlock"`
 	Payload            []byte                     `json:"payload"`
+	ContentType        string                     `json:"contentType"`
 	StringAnnotations  []entity.StringAnnotation  `json:"stringAnnotations"`
 	NumericAnnotations []entity.NumericAnnotation `json:"numericAnnotations"`
 	TransactionIndex   uint64                     `json:"txIndex"`
 	OperationIndex     uint64                     `json:"opIndex"`
+}
+
+type ChangeOwner struct {
+	EntityKey        common.Hash    `json:"entityKey"`
+	Owner            common.Address `json:"owner"`
+	TransactionIndex uint64         `json:"txIndex"`
+	OperationIndex   uint64         `json:"opIndex"`
 }
 
 type ExtendBTL struct {
@@ -87,7 +97,7 @@ func NewStore(dbFile string, historicBlocksCount uint64) (*SQLStore, error) {
 		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}
 
-	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?cache=shared&mode=rwc&_journal_mode=WAL", dbFile))
+	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?cache=shared&mode=rwc&_journal_mode=WAL&_auto_vacuum=incremental&_foreign_keys=true", dbFile))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
@@ -332,6 +342,7 @@ func (e *SQLStore) SnapSyncToBlock(
 			Key:                         entity.Key.Hex(),
 			ExpiresAt:                   int64(entity.Metadata.ExpiresAtBlock),
 			Payload:                     entity.Payload,
+			ContentType:                 entity.Metadata.ContentType,
 			OwnerAddress:                entity.Metadata.Owner.Hex(),
 			CreatedAtBlock:              int64(entity.Metadata.CreatedAtBlock),
 			LastModifiedAtBlock:         int64(entity.Metadata.LastModifiedAtBlock),
@@ -457,6 +468,7 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 				Key:                         op.Create.EntityKey.Hex(),
 				ExpiresAt:                   int64(op.Create.ExpiresAtBlock),
 				Payload:                     op.Create.Payload,
+				ContentType:                 op.Create.ContentType,
 				OwnerAddress:                op.Create.Owner.Hex(),
 				CreatedAtBlock:              int64(blockWal.BlockInfo.Number),
 				LastModifiedAtBlock:         int64(blockWal.BlockInfo.Number),
@@ -503,6 +515,7 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 				Key:                         op.Update.EntityKey.Hex(),
 				ExpiresAt:                   int64(op.Update.ExpiresAtBlock),
 				Payload:                     op.Update.Payload,
+				ContentType:                 op.Update.ContentType,
 				OwnerAddress:                existingEntity.OwnerAddress,
 				CreatedAtBlock:              existingEntity.CreatedAtBlock,
 				LastModifiedAtBlock:         int64(blockWal.BlockInfo.Number),
@@ -534,6 +547,66 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 					return fmt.Errorf("failed to insert string annotation: %w", err)
 				}
 			}
+
+		case op.ChangeOwner != nil:
+			changeOwnerParams := sqlitegolem.UpdateEntityOwnerParams{
+				Key:                         op.ChangeOwner.EntityKey.Hex(),
+				LastModifiedAtBlock:         int64(blockWal.BlockInfo.Number),
+				TransactionIndexInBlock:     int64(op.ChangeOwner.TransactionIndex),
+				OperationIndexInTransaction: int64(op.ChangeOwner.OperationIndex),
+				OwnerAddress:                op.ChangeOwner.Owner.Hex(),
+			}
+
+			log.Info("change owner", "params", changeOwnerParams)
+
+			// Fetch the existing annotations before we update the entity, so that we
+			// can re-insert them with the new block number.
+			numericAnnotations, err := txDB.GetNumericAnnotations(ctx, sqlitegolem.GetNumericAnnotationsParams{
+				EntityKey: op.ChangeOwner.EntityKey.Hex(),
+				Block:     int64(blockWal.BlockInfo.Number),
+			})
+			if err != nil {
+				return fmt.Errorf("failed to fetch annotations: %w", err)
+			}
+
+			stringAnnotations, err := txDB.GetStringAnnotations(ctx, sqlitegolem.GetStringAnnotationsParams{
+				EntityKey: op.ChangeOwner.EntityKey.Hex(),
+				Block:     int64(blockWal.BlockInfo.Number),
+			})
+			if err != nil {
+				return fmt.Errorf("failed to fetch annotations: %w", err)
+			}
+
+			// Update the entity with the new expiry time
+			err = txDB.UpdateEntityOwner(ctx, changeOwnerParams)
+			if err != nil {
+				return fmt.Errorf("failed to change owner: %w", err)
+			}
+
+			for _, annotation := range numericAnnotations {
+				err = txDB.InsertNumericAnnotation(ctx, sqlitegolem.InsertNumericAnnotationParams{
+					EntityKey:                 op.ChangeOwner.EntityKey.Hex(),
+					EntityLastModifiedAtBlock: int64(blockWal.BlockInfo.Number),
+					AnnotationKey:             annotation.AnnotationKey,
+					Value:                     int64(annotation.Value),
+				})
+				if err != nil {
+					return fmt.Errorf("failed to insert numeric annotation: %w", err)
+				}
+			}
+
+			for _, annotation := range stringAnnotations {
+				err = txDB.InsertStringAnnotation(ctx, sqlitegolem.InsertStringAnnotationParams{
+					EntityKey:                 op.ChangeOwner.EntityKey.Hex(),
+					EntityLastModifiedAtBlock: int64(blockWal.BlockInfo.Number),
+					AnnotationKey:             annotation.AnnotationKey,
+					Value:                     annotation.Value,
+				})
+				if err != nil {
+					return fmt.Errorf("failed to insert string annotation: %w", err)
+				}
+			}
+
 		case op.Delete != nil:
 			params := sqlitegolem.DeleteEntityParams{
 				Key:                         op.Delete.EntityKey.Hex(),
@@ -632,152 +705,6 @@ func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID
 	return tx.Commit()
 }
 
-func (e *SQLStore) QueryEntities(
-	ctx context.Context,
-	query string,
-	args []any,
-	options query.QueryOptions,
-) ([]arkivtype.EntityData, error) {
-	log.Info("Executing query", "query", query, "args", args)
-
-	// Begin a read-only transaction for consistency
-	tx, err := e.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
-	if err != nil {
-		return nil, fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback() // Safe to call even after commit
-
-	txDB := sqlitegolem.New(tx)
-
-	rows, err := tx.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get entities for query: %s: %w", query, err)
-	}
-	defer rows.Close()
-
-	results := make([]arkivtype.EntityData, 0)
-	for rows.Next() {
-
-		result := struct {
-			key       *string
-			expiresAt *uint64
-			payload   *[]byte
-			owner     *string
-		}{}
-		dest := []any{}
-		for _, column := range options.AllColumns() {
-			switch column {
-			case "key":
-				var key string
-				result.key = &key
-				dest = append(dest, result.key)
-			case "expires_at":
-				var expiration uint64
-				result.expiresAt = &expiration
-				dest = append(dest, result.expiresAt)
-			case "payload":
-				var payload []byte
-				result.payload = &payload
-				dest = append(dest, result.payload)
-			case "owner_address":
-				var owner string
-				result.owner = &owner
-				dest = append(dest, result.owner)
-			case "last_modified_at_block":
-				var lastModifiedAtBlock uint64
-				dest = append(dest, &lastModifiedAtBlock)
-			case "transaction_index_in_block":
-				var transactionIndexInBlock uint64
-				dest = append(dest, &transactionIndexInBlock)
-			case "operation_index_in_transaction":
-				var operationIndexInTransaction uint64
-				dest = append(dest, &operationIndexInTransaction)
-			default:
-				return nil, fmt.Errorf("unknown column: %s", column)
-			}
-		}
-
-		if err := rows.Scan(dest...); err != nil {
-			return nil, fmt.Errorf("failed to get entities for query: %s: %w", query, err)
-		}
-
-		key := common.Hash{}
-		if result.key != nil {
-			key = common.HexToHash(*result.key)
-		}
-		expiresAt := uint64(0)
-		if result.expiresAt != nil {
-			expiresAt = *result.expiresAt
-		}
-		var payload []byte = nil
-		if result.payload != nil {
-			payload = *result.payload
-		}
-		owner := common.Address{}
-		if result.owner != nil {
-			owner = common.HexToAddress(*result.owner)
-		}
-
-		r := arkivtype.EntityData{
-			Key:                key,
-			ExpiresAt:          expiresAt,
-			Value:              payload,
-			Owner:              owner,
-			StringAnnotations:  []entity.StringAnnotation{},
-			NumericAnnotations: []entity.NumericAnnotation{},
-		}
-
-		if options.IncludeAnnotations {
-			// Get string annotations
-			stringAnnotRows, err := txDB.GetStringAnnotations(ctx, sqlitegolem.GetStringAnnotationsParams{
-				EntityKey: key.Hex(),
-				Block:     int64(options.AtBlock),
-			})
-			if err != nil {
-				return nil, fmt.Errorf("failed to get string annotations: %w", err)
-			}
-
-			// Get numeric annotations
-			numericAnnotRows, err := txDB.GetNumericAnnotations(ctx, sqlitegolem.GetNumericAnnotationsParams{
-				EntityKey: key.Hex(),
-				Block:     int64(options.AtBlock),
-			})
-			if err != nil {
-				return nil, fmt.Errorf("failed to get numeric annotations: %w", err)
-			}
-
-			// Convert string annotations
-			for _, row := range stringAnnotRows {
-				r.StringAnnotations = append(r.StringAnnotations, entity.StringAnnotation{
-					Key:   row.AnnotationKey,
-					Value: row.Value,
-				})
-			}
-
-			// Convert numeric annotations
-			for _, row := range numericAnnotRows {
-				r.NumericAnnotations = append(r.NumericAnnotations, entity.NumericAnnotation{
-					Key:   row.AnnotationKey,
-					Value: uint64(row.Value),
-				})
-			}
-		}
-
-		results = append(results, r)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("failed to get entities for query: %s: %w", query, err)
-	}
-
-	// Commit the transaction (read-only, but ensures consistency)
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	return results, nil
-}
-
 var ErrStopIteration = errors.New("stop iteration")
 
 func (e *SQLStore) QueryEntitiesInternalIterator(
@@ -815,6 +742,7 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 			key                         *string
 			expiresAt                   *uint64
 			payload                     *[]byte
+			contentType                 *string
 			owner                       *string
 			lastModifiedAtBlock         *uint64
 			transactionIndexInBlock     *uint64
@@ -839,6 +767,11 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 				result.payload = &payload
 				dest = append(dest, result.payload)
 				columns["payload"] = result.payload
+			case "content_type":
+				var contentType string
+				result.contentType = &contentType
+				dest = append(dest, result.contentType)
+				columns["content_type"] = result.contentType
 			case "owner_address":
 				var owner string
 				result.owner = &owner
@@ -880,6 +813,10 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 		if result.payload != nil {
 			payload = *result.payload
 		}
+		contentType := "application/octet-stream"
+		if result.contentType != nil {
+			contentType = *result.contentType
+		}
 		owner := common.Address{}
 		if result.owner != nil {
 			owner = common.HexToAddress(*result.owner)
@@ -889,6 +826,7 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 			Key:                key,
 			ExpiresAt:          expiresAt,
 			Value:              payload,
+			ContentType:        contentType,
 			Owner:              owner,
 			StringAnnotations:  []entity.StringAnnotation{},
 			NumericAnnotations: []entity.NumericAnnotation{},

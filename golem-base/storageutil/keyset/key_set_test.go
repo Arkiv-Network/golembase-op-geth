@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil"
+	"github.com/ethereum/go-ethereum/golem-base/address"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -307,7 +307,7 @@ func TestClearEmptySet(t *testing.T) {
 	assert.Equal(t, uint64(0), size.Uint64())
 
 	// Storage should be empty
-	assert.Equal(t, 0, db.GetStorageEntryCount(storageutil.GolemDBAddress))
+	assert.Equal(t, 0, db.GetStorageEntryCount(address.ArkivProcessorAddress))
 }
 
 func TestClearSetWithSingleValue(t *testing.T) {
@@ -325,7 +325,7 @@ func TestClearSetWithSingleValue(t *testing.T) {
 	assert.Equal(t, uint64(1), size.Uint64())
 
 	// Storage should have entries
-	entriesBefore := db.GetStorageEntryCount(storageutil.GolemDBAddress)
+	entriesBefore := db.GetStorageEntryCount(address.ArkivProcessorAddress)
 	assert.Greater(t, entriesBefore, 0)
 
 	// Clear the set
@@ -337,7 +337,7 @@ func TestClearSetWithSingleValue(t *testing.T) {
 	assert.Equal(t, uint64(0), size.Uint64())
 
 	// Storage should be completely empty after clearing
-	assert.Equal(t, 0, db.GetStorageEntryCount(storageutil.GolemDBAddress))
+	assert.Equal(t, 0, db.GetStorageEntryCount(address.ArkivProcessorAddress))
 }
 
 func TestClearSetWithMultipleValues(t *testing.T) {
@@ -363,7 +363,7 @@ func TestClearSetWithMultipleValues(t *testing.T) {
 	assert.Equal(t, uint64(len(values)), size.Uint64())
 
 	// Storage should have entries
-	entriesBefore := db.GetStorageEntryCount(storageutil.GolemDBAddress)
+	entriesBefore := db.GetStorageEntryCount(address.ArkivProcessorAddress)
 	assert.Greater(t, entriesBefore, 0)
 
 	// Clear the set
@@ -377,7 +377,7 @@ func TestClearSetWithMultipleValues(t *testing.T) {
 	assert.Equal(t, uint64(0), size.Uint64())
 
 	// Storage should be completely empty after clearing
-	assert.Equal(t, 0, db.GetStorageEntryCount(storageutil.GolemDBAddress))
+	assert.Equal(t, 0, db.GetStorageEntryCount(address.ArkivProcessorAddress))
 }
 
 func TestClearAndReaddValues(t *testing.T) {
@@ -393,7 +393,7 @@ func TestClearAndReaddValues(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Storage should have entries
-	entriesBefore := db.GetStorageEntryCount(storageutil.GolemDBAddress)
+	entriesBefore := db.GetStorageEntryCount(address.ArkivProcessorAddress)
 	assert.Greater(t, entriesBefore, 0)
 
 	// Clear the set
@@ -404,7 +404,7 @@ func TestClearAndReaddValues(t *testing.T) {
 	assert.Equal(t, uint64(0), size.Uint64())
 
 	// Storage should be empty after clearing
-	assert.Equal(t, 0, db.GetStorageEntryCount(storageutil.GolemDBAddress))
+	assert.Equal(t, 0, db.GetStorageEntryCount(address.ArkivProcessorAddress))
 
 	// Add values again
 	err = keyset.AddValue(db, setKey, value1)
@@ -419,7 +419,7 @@ func TestClearAndReaddValues(t *testing.T) {
 	assert.Equal(t, uint64(2), size.Uint64())
 
 	// Storage should have entries again
-	entriesAfter := db.GetStorageEntryCount(storageutil.GolemDBAddress)
+	entriesAfter := db.GetStorageEntryCount(address.ArkivProcessorAddress)
 	assert.Greater(t, entriesAfter, 0)
 }
 

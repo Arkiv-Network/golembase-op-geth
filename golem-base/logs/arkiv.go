@@ -21,3 +21,7 @@ var ArkivEntityDeleted = crypto.Keccak256Hash([]byte("ArkivEntityDeleted(uint256
 // ArkivEntityBTLExtended is the event signature for extending BTL of an entity.
 // Parameters: entityKey (indexed), ownerAddress(indexed), oldExpirationBlock, newExpirationBlock, cost (wei)
 var ArkivEntityBTLExtended = crypto.Keccak256Hash([]byte("ArkivEntityBTLExtended(uint256,address,uint256,uint256,uint256)"))
+
+// ArkivEntityOwnerChanged is the event signature for changing the owner of an entity.
+// Parameters: entityKey (indexed), oldOwnerAddress(indexed), newOwnerAddress(indexed)
+var ArkivEntityOwnerChanged = crypto.Keccak256Hash([]byte("ArkivEntityOwnerChanged(uint256,address,address)"))

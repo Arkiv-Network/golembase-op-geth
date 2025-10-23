@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storagetx"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/golem-base/testutil"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/holiman/uint256"
 	"github.com/spf13/pflag" // godog v0.11.0 and later
@@ -183,6 +184,11 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the entity update log should be recorded$`, theEntityUpdateLogShouldBeRecorded)
 	ctx.Step(`^the entity delete log should be recorded$`, theEntityDeleteLogShouldBeRecorded)
 	ctx.Step(`^the entity extend log should be recorded$`, theEntityExtendLogShouldBeRecorded)
+
+	ctx.Step(`^I submit a transaction to change the owner of the entity$`, iSubmitATransactionToChangeTheOwnerOfTheEntity)
+	ctx.Step(`^the entity owner change log should be recorded$`, theEntityOwnerChangeLogShouldBeRecorded)
+	ctx.Step(`^the owner of the entity should be changed$`, theOwnerOfTheEntityShouldBeChanged)
+	ctx.Step(`^I submit a transaction to change the owner of the entity by non-owner$`, iSubmitATransactionToChangeTheOwnerOfTheEntityByNonowner)
 
 	// Storage Transaction Validation Steps
 	ctx.Step(`^I have a storage transaction with create, update, delete, and extend operations$`, iHaveAStorageTransactionWithCreateUpdateDeleteAndExtendOperations)
@@ -394,6 +400,10 @@ func theEntityShouldBeCreated(ctx context.Context) error {
 
 	if string(ed.Value) != "test payload" {
 		return fmt.Errorf("unexpected storage value: %s", string(ed.Value))
+	}
+
+	if string(ed.ContentType) != "application/octet-stream" {
+		return fmt.Errorf("unexpected content-type: %s", string(ed.ContentType))
 	}
 
 	return nil
@@ -920,6 +930,10 @@ func thePayloadOfTheEntityShouldBeChanged(ctx context.Context) error {
 
 	if string(ed.Value) != "new payload" {
 		return fmt.Errorf("unexpected storage value: %s", string(ed.Value))
+	}
+
+	if string(ed.ContentType) != "application/octet-stream" {
+		return fmt.Errorf("unexpected content-type: %s", string(ed.ContentType))
 	}
 
 	return nil
@@ -2519,5 +2533,140 @@ func theEntityExtendLogShouldBeRecorded(ctx context.Context) error {
 		}
 	}
 
+	return nil
+}
+
+func iSubmitATransactionToChangeTheOwnerOfTheEntity(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+
+	tx := &storagetx.ArkivTransaction{
+		ChangeOwner: []storagetx.ArkivChangeOwner{
+			{
+				EntityKey: w.CreatedEntityKey,
+				NewOwner:  common.HexToAddress("0x1234567890123456789012345678901234567890"),
+			},
+		},
+	}
+
+	txData, err := rlp.EncodeToBytes(tx)
+	if err != nil {
+		return fmt.Errorf("failed to encode transaction: %w", err)
+	}
+
+	_, err = w.SendTxWithData(
+		ctx,
+		big.NewInt(1),
+		address.ArkivProcessorAddress,
+		txData,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to send transaction: %w", err)
+	}
+	return nil
+}
+
+func theEntityOwnerChangeLogShouldBeRecorded(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	receipt := w.LastReceipt
+
+	if len(receipt.Logs) == 0 {
+		return fmt.Errorf("no logs found in receipt")
+	}
+
+	if len(receipt.Logs) != 1 {
+		return fmt.Errorf("expected 2 logs, got %d", len(receipt.Logs))
+	}
+
+	log := receipt.Logs[0]
+
+	if log.Topics[0] != arkivlogs.ArkivEntityOwnerChanged {
+		return fmt.Errorf("expected ArkivEntityOwnerChanged log, got %s", log.Topics[0].Hex())
+	}
+
+	if len(log.Topics) != 4 {
+		return fmt.Errorf("expected 4 topics, got %d", len(log.Topics))
+	}
+
+	if log.Topics[1] != w.CreatedEntityKey {
+		return fmt.Errorf("expected arkiv entity owner changed entity key to be %s, got %s", w.CreatedEntityKey.Hex(), log.Topics[1])
+	}
+
+	oldOwner := hashToAddress(log.Topics[2])
+
+	if oldOwner != w.FundedAccount.Address {
+		return fmt.Errorf("expected old owner to be %s, got %s", w.FundedAccount.Address.Hex(), oldOwner.Hex())
+	}
+
+	newOwner := hashToAddress(log.Topics[3])
+
+	if newOwner != common.HexToAddress("0x1234567890123456789012345678901234567890") {
+		return fmt.Errorf("expected new owner to be %s, got %s", common.HexToAddress("0x1234567890123456789012345678901234567890").Hex(), newOwner.Hex())
+	}
+
+	return nil
+}
+
+func theOwnerOfTheEntityShouldBeChanged(ctx context.Context) error {
+
+	w := testutil.GetWorld(ctx)
+	rcpClient := w.GethInstance.RPCClient
+
+	key := w.CreatedEntityKey
+
+	var e arkivtype.QueryResponse
+	err := rcpClient.CallContext(
+		ctx,
+		&e,
+		"arkiv_query",
+		fmt.Sprintf(`$key = %s`, key.Hex()),
+		struct{}{},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to get storage value: %w", err)
+	}
+
+	ed := arkivtype.EntityData{}
+
+	err = json.Unmarshal(e.Data[0], &ed)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal entity data: %w", err)
+	}
+
+	if string(ed.Value) != "test payload" {
+		return fmt.Errorf("unexpected storage value: %s", string(ed.Value))
+	}
+
+	newOwner := ed.Owner
+
+	if newOwner != common.HexToAddress("0x1234567890123456789012345678901234567890") {
+		return fmt.Errorf("expected new owner to be %s, got %s", common.HexToAddress("0x1234567890123456789012345678901234567890").Hex(), newOwner.Hex())
+	}
+
+	return nil
+}
+
+func iSubmitATransactionToChangeTheOwnerOfTheEntityByNonowner(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	tx := &storagetx.ArkivTransaction{
+		ChangeOwner: []storagetx.ArkivChangeOwner{
+			{
+				EntityKey: w.CreatedEntityKey,
+				NewOwner:  common.HexToAddress("0x1234567890123456789012345678901234567890"),
+			},
+		},
+	}
+	txData, err := rlp.EncodeToBytes(tx)
+	if err != nil {
+		return fmt.Errorf("failed to encode transaction: %w", err)
+	}
+	_, err = w.SendTxFromSecondAccountWithData(
+		ctx,
+		big.NewInt(0),
+		address.ArkivProcessorAddress,
+		txData,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to send transaction: %w", err)
+	}
 	return nil
 }

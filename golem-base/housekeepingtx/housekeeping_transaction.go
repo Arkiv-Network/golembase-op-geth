@@ -26,10 +26,10 @@ func ExecuteTransaction(blockNumber uint64, txHash common.Hash, db vm.StateDB) (
 
 	// create the golem base storage processor address if it doesn't exist
 	// this is needed to be able to use the state access interface
-	if !db.Exist(address.GolemBaseStorageProcessorAddress) {
-		db.CreateAccount(address.GolemBaseStorageProcessorAddress)
-		db.CreateContract(address.GolemBaseStorageProcessorAddress)
-		db.SetNonce(address.GolemBaseStorageProcessorAddress, 1, tracing.NonceChangeNewContract)
+	if !db.Exist(address.ArkivProcessorAddress) {
+		db.CreateAccount(address.ArkivProcessorAddress)
+		db.CreateContract(address.ArkivProcessorAddress)
+		db.SetNonce(address.ArkivProcessorAddress, 1, tracing.NonceChangeNewContract)
 	}
 
 	logs := []*types.Log{}
@@ -59,7 +59,7 @@ func ExecuteTransaction(blockNumber uint64, txHash common.Hash, db vm.StateDB) (
 				BlockNumber: blockNumber,
 			},
 			&types.Log{
-				Address: common.Address(address.GolemBaseStorageProcessorAddress),
+				Address: common.Address(address.ArkivProcessorAddress),
 				Topics: []common.Hash{
 					arkivlogs.ArkivEntityExpired,
 					toDelete,
@@ -69,8 +69,6 @@ func ExecuteTransaction(blockNumber uint64, txHash common.Hash, db vm.StateDB) (
 				BlockNumber: blockNumber,
 			},
 		)
-
-		// logs = append(logs, log)
 
 		return nil
 	}

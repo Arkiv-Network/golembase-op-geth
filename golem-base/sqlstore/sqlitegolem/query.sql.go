@@ -77,7 +77,7 @@ func (q *Queries) DeleteEntitiesUntilBlock(ctx context.Context, block int64) err
 
 const deleteEntity = `-- name: DeleteEntity :exec
 INSERT INTO entities (
-  key, expires_at, payload, owner_address,
+  key, expires_at, payload, content_type, owner_address,
   created_at_block, last_modified_at_block, deleted,
   transaction_index_in_block, operation_index_in_transaction
 )
@@ -85,6 +85,7 @@ SELECT
     e.key,
     e.expires_at,
     e.payload,
+    e.content_type,
     e.owner_address,
     e.created_at_block,
     ?1 AS last_modified_at_block,
@@ -414,12 +415,12 @@ func (q *Queries) HasProcessingStatus(ctx context.Context, network string) (bool
 
 const insertEntity = `-- name: InsertEntity :exec
 INSERT INTO entities (
-  key, expires_at, payload, owner_address,
+  key, expires_at, payload, content_type, owner_address,
   created_at_block, last_modified_at_block, deleted,
   transaction_index_in_block, operation_index_in_transaction
 )
 VALUES (
-  ?, ?, ?, ?,
+  ?, ?, ?, ?, ?,
   ?, ?, ?,
   ?, ?
 )
@@ -429,6 +430,7 @@ type InsertEntityParams struct {
 	Key                         string
 	ExpiresAt                   int64
 	Payload                     []byte
+	ContentType                 string
 	OwnerAddress                string
 	CreatedAtBlock              int64
 	LastModifiedAtBlock         int64
@@ -442,6 +444,7 @@ func (q *Queries) InsertEntity(ctx context.Context, arg InsertEntityParams) erro
 		arg.Key,
 		arg.ExpiresAt,
 		arg.Payload,
+		arg.ContentType,
 		arg.OwnerAddress,
 		arg.CreatedAtBlock,
 		arg.LastModifiedAtBlock,
@@ -519,7 +522,7 @@ func (q *Queries) InsertStringAnnotation(ctx context.Context, arg InsertStringAn
 
 const updateEntityExpiresAt = `-- name: UpdateEntityExpiresAt :exec
 INSERT INTO entities (
-  key, expires_at, payload, owner_address,
+  key, expires_at, payload, content_type, owner_address,
   created_at_block, last_modified_at_block, deleted,
   transaction_index_in_block, operation_index_in_transaction
 )
@@ -527,6 +530,7 @@ SELECT
     e.key,
     ?1 AS expires_at,
     e.payload,
+    e.content_type,
     e.owner_address,
     e.created_at_block,
     ?2 AS last_modified_at_block,
@@ -555,6 +559,53 @@ type UpdateEntityExpiresAtParams struct {
 func (q *Queries) UpdateEntityExpiresAt(ctx context.Context, arg UpdateEntityExpiresAtParams) error {
 	_, err := q.db.ExecContext(ctx, updateEntityExpiresAt,
 		arg.ExpiresAt,
+		arg.LastModifiedAtBlock,
+		arg.TransactionIndexInBlock,
+		arg.OperationIndexInTransaction,
+		arg.Key,
+	)
+	return err
+}
+
+const updateEntityOwner = `-- name: UpdateEntityOwner :exec
+INSERT INTO entities (
+  key, expires_at, payload, content_type, owner_address,
+  created_at_block, last_modified_at_block, deleted,
+  transaction_index_in_block, operation_index_in_transaction
+)
+SELECT
+    e.key,
+    e.expires_at,
+    e.payload,
+    e.content_type,
+    ?1,
+    e.created_at_block,
+    ?2 AS last_modified_at_block,
+    e.deleted,
+    ?3 AS transaction_index_in_block,
+    ?4 AS operation_index_in_transaction
+FROM entities AS e
+WHERE e.key = ?5
+AND e.deleted = FALSE
+AND NOT EXISTS (
+  SELECT 1
+  FROM entities AS e2
+  WHERE e2.key = e.key
+  AND e2.last_modified_at_block > e.last_modified_at_block
+)
+`
+
+type UpdateEntityOwnerParams struct {
+	OwnerAddress                string
+	LastModifiedAtBlock         int64
+	TransactionIndexInBlock     int64
+	OperationIndexInTransaction int64
+	Key                         string
+}
+
+func (q *Queries) UpdateEntityOwner(ctx context.Context, arg UpdateEntityOwnerParams) error {
+	_, err := q.db.ExecContext(ctx, updateEntityOwner,
+		arg.OwnerAddress,
 		arg.LastModifiedAtBlock,
 		arg.TransactionIndexInBlock,
 		arg.OperationIndexInTransaction,
