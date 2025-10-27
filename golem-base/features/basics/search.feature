@@ -40,6 +40,12 @@ Feature: Search
       """
     Then I should see an error containing "unexpected token"
 
+  Scenario: no extraneous fields in response
+    Given I have an entity "e1" with string annotations:
+      | foo | bar |
+    When I search for entities without requesting columns
+    Then the response would be empty
+
   Scenario: search for entities of an owner
     Given I have created an entity
     When I search for entities of an owner

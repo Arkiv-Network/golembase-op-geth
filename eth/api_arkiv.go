@@ -163,10 +163,7 @@ func (api *arkivAPI) Query(
 		block = *options.AtBlock
 	}
 
-	columns := allColumns
-	if len(options.Columns) > 0 {
-		columns = options.Columns
-	}
+	columns := options.Columns
 
 	columnOffsets := []arkivtype.OffsetValue{}
 	if options.Offset != nil {

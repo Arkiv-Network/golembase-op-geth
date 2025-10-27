@@ -162,6 +162,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the list of all entities should be empty$`, theListOfAllEntitiesShouldBeEmpty)
 	ctx.Step(`^I search for entities with the invalid query$`, iSearchForEntitiesWithTheInvalidQuery)
 	ctx.Step(`^I should see an error containing "([^"]*)"$`, iShouldSeeAnErrorContaining)
+	ctx.Step(`^I search for entities without requesting columns$`, iSearchForEntitiesWithoutColumns)
+	ctx.Step(`^the response would be empty$`, theResponseWouldBeEmpty)
 	ctx.Step(`^the entity should be in the list of entities of the owner$`, theEntityShouldBeInTheListOfEntitiesOfTheOwner)
 	ctx.Step(`^the sender should be the owner of the entity$`, theSenderShouldBeTheOwnerOfTheEntity)
 	ctx.Step(`^the owner should not have any entities$`, theOwnerShouldNotHaveAnyEntities)
@@ -250,6 +252,68 @@ func iShouldSeeAnErrorContaining(ctx context.Context, expectedSubstring string) 
 
 	if !strings.Contains(w.LastError.Error(), expectedSubstring) {
 		return fmt.Errorf("error %w does not contain expected substring: %s", w.LastError, expectedSubstring)
+	}
+
+	return nil
+}
+
+func iSearchForEntitiesWithoutColumns(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+
+	response := arkivtype.QueryResponse{}
+	err := w.GethInstance.RPCClient.CallContext(
+		ctx,
+		&response,
+		"arkiv_query",
+		`foo = "bar"`,
+		eth.QueryOptions{
+			IncludeData: &eth.IncludeData{},
+		},
+	)
+
+	w.LastError = err
+
+	edList := []arkivtype.EntityData{}
+	for _, d := range response.Data {
+		ed := arkivtype.EntityData{}
+
+		err = json.Unmarshal(d, &ed)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal entity data: %w", err)
+		}
+		edList = append(edList, ed)
+	}
+
+	w.ArkivSearchResult = edList
+
+	return nil
+}
+
+func theResponseWouldBeEmpty(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+
+	for _, ed := range w.ArkivSearchResult {
+		if ed.ContentType != nil {
+			return fmt.Errorf("expected content type to be nil, but got: %s", *ed.ContentType)
+		}
+		if ed.Value != nil {
+			return fmt.Errorf("expected value to be nil, but got array of length %d", len(ed.Value))
+		}
+		if ed.ExpiresAt != nil {
+			return fmt.Errorf("expected expiry to be nil, but got: %d", *ed.ExpiresAt)
+		}
+		if ed.Key != nil {
+			return fmt.Errorf("expected key to be nil, but got: %s", ed.Key.Hex())
+		}
+		if ed.Owner != nil {
+			return fmt.Errorf("expected owner to be nil, but got: %s", ed.Owner.Hex())
+		}
+		if ed.StringAnnotations != nil {
+			return fmt.Errorf("expected string annotations to be nil, but got array of length %d", len(ed.StringAnnotations))
+		}
+		if ed.NumericAnnotations != nil {
+			return fmt.Errorf("expected numericAnnotations to be nil, but got array of length %d", len(ed.NumericAnnotations))
+		}
 	}
 
 	return nil
@@ -402,8 +466,8 @@ func theEntityShouldBeCreated(ctx context.Context) error {
 		return fmt.Errorf("unexpected storage value: %s", string(ed.Value))
 	}
 
-	if string(ed.ContentType) != "application/octet-stream" {
-		return fmt.Errorf("unexpected content-type: %s", string(ed.ContentType))
+	if string(*ed.ContentType) != "application/octet-stream" {
+		return fmt.Errorf("unexpected content-type: %s", string(*ed.ContentType))
 	}
 
 	return nil
@@ -465,7 +529,7 @@ func theExpiryOfTheEntityShouldBeRecorded(ctx context.Context) error {
 		return fmt.Errorf("failed to unmarshal entity data: %w", err)
 	}
 
-	if ed.Key != key {
+	if *ed.Key != key {
 		return fmt.Errorf("unexpected entity to expire: %s (expected %s)", ed.Key.Hex(), key.Hex())
 	}
 
@@ -521,8 +585,11 @@ func iShouldBeAbleToRetrieveTheEntityByTheStringAnnotation(ctx context.Context) 
 		return fmt.Errorf("failed to unmarshal entity data: %w", err)
 	}
 
-	if ed.Key != key {
+	if *ed.Key != key {
 		return fmt.Errorf("unexpected retrieved entity: %s (expected %s)", ed.Key.Hex(), key.Hex())
+	}
+	if *ed.ContentType != "application/octet-stream" {
+		return fmt.Errorf("unexpected content-type: %s (expected %s)", *ed.ContentType, "application/octet-stream")
 	}
 
 	return nil
@@ -576,7 +643,7 @@ func iShouldBeAbleToRetrieveTheEntityByTheNumericAnnotation(ctx context.Context)
 		return fmt.Errorf("failed to unmarshal entity data: %w", err)
 	}
 
-	if ed.Key != key {
+	if *ed.Key != key {
 		return fmt.Errorf("unexpected retrieved entity: %s (expected %s)", ed.Key.Hex(), key.Hex())
 	}
 
@@ -932,8 +999,8 @@ func thePayloadOfTheEntityShouldBeChanged(ctx context.Context) error {
 		return fmt.Errorf("unexpected storage value: %s", string(ed.Value))
 	}
 
-	if string(ed.ContentType) != "application/octet-stream" {
-		return fmt.Errorf("unexpected content-type: %s", string(ed.ContentType))
+	if string(*ed.ContentType) != "application/octet-stream" {
+		return fmt.Errorf("unexpected content-type: %s", string(*ed.ContentType))
 	}
 
 	return nil
@@ -1014,7 +1081,7 @@ func theAnnotationsOfTheEntityShouldBeChanged(ctx context.Context) error {
 		return fmt.Errorf("failed to unmarshal entity data: %w", err)
 	}
 
-	if ed.Key != w.CreatedEntityKey {
+	if *ed.Key != w.CreatedEntityKey {
 		return fmt.Errorf("expected entity hash %s but got %s", w.CreatedEntityKey.Hex(), ed.Key.Hex())
 	}
 
@@ -1057,7 +1124,7 @@ func theAnnotationsOfTheEntityAtThePreviousBlockShouldNotBeChanged(ctx context.C
 		return fmt.Errorf("failed to unmarshal entity data: %w", err)
 	}
 
-	if ed.Key != w.CreatedEntityKey {
+	if *ed.Key != w.CreatedEntityKey {
 		return fmt.Errorf(
 			"expected entity hash %s but got %s",
 			w.CreatedEntityKey.Hex(),
@@ -1144,7 +1211,7 @@ func theBtlOfTheEntityShouldBeChanged(ctx context.Context) error {
 		return fmt.Errorf("failed to unmarshal entity data: %w", err)
 	}
 
-	if ed.Key != key {
+	if *ed.Key != key {
 		return fmt.Errorf("unexpected entity to expire: %s (expected %s)", ed.Key.Hex(), key.Hex())
 	}
 
@@ -1444,7 +1511,7 @@ func theEntityShouldBeInTheListOfAllEntities(ctx context.Context) error {
 			return fmt.Errorf("failed to unmarshal entity data: %w", err)
 		}
 
-		if ed.Key == w.CreatedEntityKey {
+		if *ed.Key == w.CreatedEntityKey {
 			found = true
 		}
 	}
@@ -1534,7 +1601,7 @@ func theEntityShouldBeInTheListOfEntitiesOfTheOwner(ctx context.Context) error {
 			return fmt.Errorf("failed to unmarshal entity data: %w", err)
 		}
 
-		if ed.Key == w.CreatedEntityKey {
+		if *ed.Key == w.CreatedEntityKey {
 			found = true
 		}
 	}
@@ -1585,7 +1652,7 @@ func theSenderShouldBeTheOwnerOfTheEntity(ctx context.Context) error {
 		return fmt.Errorf("failed to unmarshal entity data: %w", err)
 	}
 
-	if ed.Owner != w.FundedAccount.Address {
+	if *ed.Owner != w.FundedAccount.Address {
 		return fmt.Errorf("expected owner to be %s, but got %s", w.FundedAccount.Address.Hex(), ed.Owner.Hex())
 	}
 
@@ -2638,7 +2705,7 @@ func theOwnerOfTheEntityShouldBeChanged(ctx context.Context) error {
 
 	newOwner := ed.Owner
 
-	if newOwner != common.HexToAddress("0x1234567890123456789012345678901234567890") {
+	if *newOwner != common.HexToAddress("0x1234567890123456789012345678901234567890") {
 		return fmt.Errorf("expected new owner to be %s, got %s", common.HexToAddress("0x1234567890123456789012345678901234567890").Hex(), newOwner.Hex())
 	}
 

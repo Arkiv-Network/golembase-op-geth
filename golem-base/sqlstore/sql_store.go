@@ -801,32 +801,26 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 			return fmt.Errorf("failed to get entities for query: %s: %w", query, err)
 		}
 
-		key := common.Hash{}
+		var key *common.Hash
 		if result.key != nil {
-			key = common.HexToHash(*result.key)
+			hash := common.HexToHash(*result.key)
+			key = &hash
 		}
-		expiresAt := uint64(0)
-		if result.expiresAt != nil {
-			expiresAt = *result.expiresAt
-		}
-		var payload []byte = nil
+		var payload []byte
 		if result.payload != nil {
 			payload = *result.payload
 		}
-		contentType := "application/octet-stream"
-		if result.contentType != nil {
-			contentType = *result.contentType
-		}
-		owner := common.Address{}
+		var owner *common.Address
 		if result.owner != nil {
-			owner = common.HexToAddress(*result.owner)
+			address := common.HexToAddress(*result.owner)
+			owner = &address
 		}
 
 		r := arkivtype.EntityData{
 			Key:                key,
-			ExpiresAt:          expiresAt,
+			ExpiresAt:          result.expiresAt,
 			Value:              payload,
-			ContentType:        contentType,
+			ContentType:        result.contentType,
 			Owner:              owner,
 			StringAnnotations:  []entity.StringAnnotation{},
 			NumericAnnotations: []entity.NumericAnnotation{},

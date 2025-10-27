@@ -93,8 +93,8 @@ func (api *golemBaseAPI) GetEntityMetaData(ctx context.Context, key common.Hash)
 	}
 
 	return &entity.EntityMetaData{
-		ExpiresAtBlock:     metadata.ExpiresAt,
-		Owner:              metadata.Owner,
+		ExpiresAtBlock:     *metadata.ExpiresAt,
+		Owner:              *metadata.Owner,
 		StringAnnotations:  metadata.StringAnnotations,
 		NumericAnnotations: metadata.NumericAnnotations,
 	}, nil
@@ -121,7 +121,7 @@ func (api *golemBaseAPI) GetEntitiesToExpireAtBlock(ctx context.Context, expirat
 			return nil, fmt.Errorf("failed to unmarshal entity data: %w", err)
 		}
 
-		results = append(results, metadata.Key)
+		results = append(results, *metadata.Key)
 	}
 
 	return results, nil
@@ -147,7 +147,7 @@ func (api *golemBaseAPI) GetEntitiesForStringAnnotationValue(ctx context.Context
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal entity data: %w", err)
 		}
-		results = append(results, metadata.Key)
+		results = append(results, *metadata.Key)
 	}
 
 	return results, nil
@@ -172,7 +172,7 @@ func (api *golemBaseAPI) GetEntitiesForNumericAnnotationValue(ctx context.Contex
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal entity data: %w", err)
 		}
-		results = append(results, metadata.Key)
+		results = append(results, *metadata.Key)
 	}
 
 	return results, nil
@@ -201,8 +201,8 @@ func (api *golemBaseAPI) QueryEntities(ctx context.Context, req string) ([]golem
 		}
 
 		searchResults = append(searchResults, golemtype.SearchResult{
-			Key:   metadata.Key,
-			Value: []byte(metadata.Value),
+			Key:   *metadata.Key,
+			Value: metadata.Value,
 		})
 	}
 
@@ -230,7 +230,7 @@ func (api *golemBaseAPI) GetEntitiesOfOwner(ctx context.Context, owner common.Ad
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal entity data: %w", err)
 		}
-		results = append(results, metadata.Key)
+		results = append(results, *metadata.Key)
 	}
 
 	return results, nil

@@ -165,11 +165,11 @@ type encodedOffset struct {
 }
 
 type EntityData struct {
-	Key         common.Hash    `json:"key,omitempty"`
-	Value       hexutil.Bytes  `json:"value,omitempty"`
-	ContentType string         `json:"contentType,omitempty"`
-	ExpiresAt   uint64         `json:"expiresAt,omitempty"`
-	Owner       common.Address `json:"owner,omitempty"`
+	Key         *common.Hash    `json:"key,omitempty"`
+	Value       hexutil.Bytes   `json:"value,omitempty"`
+	ContentType *string         `json:"contentType,omitempty"`
+	ExpiresAt   *uint64         `json:"expiresAt,omitempty"`
+	Owner       *common.Address `json:"owner,omitempty"`
 
 	StringAnnotations  []entity.StringAnnotation  `json:"stringAnnotations,omitempty"`
 	NumericAnnotations []entity.NumericAnnotation `json:"numericAnnotations,omitempty"`

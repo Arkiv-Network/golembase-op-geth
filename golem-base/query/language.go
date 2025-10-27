@@ -33,6 +33,9 @@ func (opts *QueryOptions) OrderByColumns() []string {
 }
 
 func (opts *QueryOptions) columnString() string {
+	if len(opts.AllColumns()) == 0 {
+		return "1"
+	}
 	return strings.Join(opts.AllColumns(), ", ")
 }
 
