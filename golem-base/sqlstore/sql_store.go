@@ -155,12 +155,6 @@ func NewStore(dbFile string, historicBlocksCount uint64) (*SQLStore, error) {
 			"existingVersion", entitiesVersion,
 			"requiredVersion", entitiesSchemaVersion,
 		)
-		_, err = tx.ExecContext(ctx, `DROP TABLE IF EXISTS entities;`)
-		if err != nil {
-			tx.Rollback()
-			db.Close()
-			return nil, fmt.Errorf("failed to drop entities table: %w", err)
-		}
 		_, err = tx.ExecContext(ctx, `DROP TABLE IF EXISTS string_annotations;`)
 		if err != nil {
 			tx.Rollback()
@@ -172,6 +166,12 @@ func NewStore(dbFile string, historicBlocksCount uint64) (*SQLStore, error) {
 			tx.Rollback()
 			db.Close()
 			return nil, fmt.Errorf("failed to drop numeric_annotations table: %w", err)
+		}
+		_, err = tx.ExecContext(ctx, `DROP TABLE IF EXISTS entities;`)
+		if err != nil {
+			tx.Rollback()
+			db.Close()
+			return nil, fmt.Errorf("failed to drop entities table: %w", err)
 		}
 	}
 
