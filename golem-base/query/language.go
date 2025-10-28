@@ -63,6 +63,7 @@ var lex = lexer.MustSimple([]lexer.SimpleRule{
 	{Name: "Owner", Pattern: `\$owner`},
 	{Name: "Key", Pattern: `\$key`},
 	{Name: "Expiration", Pattern: `\$expiration`},
+	{Name: "All", Pattern: `\$all`},
 })
 
 type SelectQuery struct {
@@ -141,6 +142,48 @@ func (b *QueryBuilder) createLeafQuery(query string, args ...any) string {
 	return tableName
 }
 
+type TopLevel struct {
+	Expression *Expression `parser:"@@"`
+	All        bool        `parser:"| @All"`
+}
+
+func (t *TopLevel) Normalise() *TopLevel {
+	if t.All {
+		return t
+	}
+	return &TopLevel{
+		Expression: t.Expression.Normalise(),
+		All:        t.All,
+	}
+}
+
+func (t *TopLevel) Evaluate(options QueryOptions) *SelectQuery {
+	tableBuilder := strings.Builder{}
+	args := []any{}
+
+	builder := QueryBuilder{
+		options:      options,
+		tableBuilder: &tableBuilder,
+		args:         args,
+		needsComma:   false,
+	}
+
+	if t.All {
+		builder.tableBuilder.WriteString(" SELECT DISTINCT ")
+		builder.tableBuilder.WriteString(builder.options.columnString())
+		builder.tableBuilder.WriteString(" FROM entities ORDER BY ")
+		builder.tableBuilder.WriteString(strings.Join(builder.options.OrderByColumns(), ", "))
+	} else {
+		t.Expression.Evaluate(&builder)
+	}
+
+	return &SelectQuery{
+		Query:   builder.tableBuilder.String(),
+		Args:    builder.args,
+		Columns: builder.options.Columns,
+	}
+}
+
 // Expression is the top-level rule.
 type Expression struct {
 	Or OrExpression `parser:"@@"`
@@ -180,20 +223,10 @@ func (e *Expression) invert() *Expression {
 	}
 }
 
-func (e *Expression) Evaluate(options QueryOptions) *SelectQuery {
-	tableBuilder := strings.Builder{}
-	args := []any{}
+func (e *Expression) Evaluate(builder *QueryBuilder) {
+	builder.tableBuilder.WriteString("WITH ")
 
-	tableBuilder.WriteString("WITH ")
-
-	builder := QueryBuilder{
-		options:      options,
-		tableBuilder: &tableBuilder,
-		args:         args,
-		needsComma:   false,
-	}
-
-	tableName := e.Or.Evaluate(&builder)
+	tableName := e.Or.Evaluate(builder)
 
 	paginationCondition, paginationArgs := builder.getPaginationArguments()
 
@@ -204,17 +237,11 @@ func (e *Expression) Evaluate(options QueryOptions) *SelectQuery {
 		p = fmt.Sprintf(" WHERE ( %s )", paginationCondition)
 	}
 
-	tableBuilder.WriteString(" SELECT DISTINCT * FROM ")
-	tableBuilder.WriteString(tableName)
-	tableBuilder.WriteString(p)
-	tableBuilder.WriteString(" ORDER BY ")
-	tableBuilder.WriteString(strings.Join(options.OrderByColumns(), ", "))
-
-	return &SelectQuery{
-		Query:   tableBuilder.String(),
-		Args:    builder.args,
-		Columns: options.Columns,
-	}
+	builder.tableBuilder.WriteString(" SELECT DISTINCT * FROM ")
+	builder.tableBuilder.WriteString(tableName)
+	builder.tableBuilder.WriteString(p)
+	builder.tableBuilder.WriteString(" ORDER BY ")
+	builder.tableBuilder.WriteString(strings.Join(builder.options.OrderByColumns(), ", "))
 }
 
 // OrExpression handles expressions connected with ||.
@@ -863,13 +890,13 @@ type Value struct {
 	Number *uint64 `parser:"| @Number"`
 }
 
-var Parser = participle.MustBuild[Expression](
+var Parser = participle.MustBuild[TopLevel](
 	participle.Lexer(lex),
 	participle.Elide("Whitespace"),
 	participle.Unquote("String"),
 )
 
-func Parse(s string) (*Expression, error) {
+func Parse(s string) (*TopLevel, error) {
 	log.Info("Parsing query", "query", s)
 
 	v, err := Parser.ParseString("", s)

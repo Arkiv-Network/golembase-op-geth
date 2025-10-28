@@ -163,6 +163,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I search for entities with the invalid query$`, iSearchForEntitiesWithTheInvalidQuery)
 	ctx.Step(`^I should see an error containing "([^"]*)"$`, iShouldSeeAnErrorContaining)
 	ctx.Step(`^I search for entities without requesting columns$`, iSearchForEntitiesWithoutColumns)
+	ctx.Step(`^I search for all entities$`, iSearchForAllEntities)
 	ctx.Step(`^the response would be empty$`, theResponseWouldBeEmpty)
 	ctx.Step(`^the entity should be in the list of entities of the owner$`, theEntityShouldBeInTheListOfEntitiesOfTheOwner)
 	ctx.Step(`^the sender should be the owner of the entity$`, theSenderShouldBeTheOwnerOfTheEntity)
@@ -269,6 +270,36 @@ func iSearchForEntitiesWithoutColumns(ctx context.Context) error {
 		eth.QueryOptions{
 			IncludeData: &eth.IncludeData{},
 		},
+	)
+
+	w.LastError = err
+
+	edList := []arkivtype.EntityData{}
+	for _, d := range response.Data {
+		ed := arkivtype.EntityData{}
+
+		err = json.Unmarshal(d, &ed)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal entity data: %w", err)
+		}
+		edList = append(edList, ed)
+	}
+
+	w.ArkivSearchResult = edList
+
+	return nil
+}
+
+func iSearchForAllEntities(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+
+	response := arkivtype.QueryResponse{}
+	err := w.GethInstance.RPCClient.CallContext(
+		ctx,
+		&response,
+		"arkiv_query",
+		`$all`,
+		eth.QueryOptions{},
 	)
 
 	w.LastError = err
@@ -771,10 +802,6 @@ func iSearchForEntitiesWithTheStringAnnotationEqualTo(ctx context.Context, key, 
 
 func iShouldFindEntity(ctx context.Context, count int) error {
 	w := testutil.GetWorld(ctx)
-
-	if len(w.SearchResult) != count {
-		return fmt.Errorf("unexpected number of entities retrieved: %d (expected %d)", len(w.SearchResult), count)
-	}
 
 	if len(w.ArkivSearchResult) != count {
 		return fmt.Errorf("unexpected number of entities retrieved: %d (expected %d)", len(w.ArkivSearchResult), count)

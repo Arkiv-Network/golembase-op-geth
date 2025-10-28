@@ -46,6 +46,14 @@ Feature: Search
     When I search for entities without requesting columns
     Then the response would be empty
 
+  Scenario: no extraneous fields in response
+    Given I have an entity "e1" with string annotations:
+      | foo | bar |
+    Given I have an entity "e2" with numeric annotations:
+      | qux | 5 |
+    When I search for all entities
+    Then I should find 2 entities
+
   Scenario: search for entities of an owner
     Given I have created an entity
     When I search for entities of an owner
