@@ -215,6 +215,13 @@ func (api *arkivAPI) Query(
 		maxResultsPerPage = int(op.ResultsPerPage)
 	}
 
+	startTime := time.Now()
+
+	defer func() {
+		elapsed := time.Since(startTime)
+		log.Info("query execution time", "elapsed", elapsed)
+	}()
+
 	err = api.store.QueryEntitiesInternalIterator(
 		ctx,
 		query.Query,
@@ -254,11 +261,6 @@ func (api *arkivAPI) Query(
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
 
-	cursorStr := "nil"
-	if response.Cursor != nil {
-		cursorStr = *response.Cursor
-	}
-	log.Info("query response", "number_of_entities", len(response.Data), "cursor", cursorStr)
 	return response, nil
 }
 

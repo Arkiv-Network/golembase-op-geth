@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/golem-base/arkivtype"
@@ -90,6 +91,7 @@ type Delete struct {
 type SQLStore struct {
 	writeDB             *sql.DB
 	readDB              *sql.DB
+	lock                *sync.RWMutex
 	historicBlocksCount uint64
 }
 
@@ -101,7 +103,7 @@ func NewStore(dbFile string, historicBlocksCount uint64) (*SQLStore, error) {
 		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}
 
-	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?cache=shared&mode=rwc&_journal_mode=WAL&_auto_vacuum=incremental&_foreign_keys=true&_txlock=immediate", dbFile))
+	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?cache=shared&mode=rwc&_journal_mode=WAL&_auto_vacuum=incremental&_foreign_keys=true&_txlock=immediate&_cache_size=1000000000", dbFile))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
@@ -209,7 +211,7 @@ func NewStore(dbFile string, historicBlocksCount uint64) (*SQLStore, error) {
 		return nil, fmt.Errorf("failed to recreate schema: %w", err)
 	}
 
-	readDB, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?cache=shared&mode=ro&_journal_mode=WAL&_auto_vacuum=incremental&_foreign_keys=true", dbFile))
+	readDB, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?cache=shared&mode=ro&_journal_mode=WAL&_auto_vacuum=incremental&_foreign_keys=true&_cache_size=1000000000", dbFile))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
@@ -220,6 +222,7 @@ func NewStore(dbFile string, historicBlocksCount uint64) (*SQLStore, error) {
 		writeDB:             db,
 		readDB:              readDB,
 		historicBlocksCount: historicBlocksCount,
+		lock:                &sync.RWMutex{},
 	}, nil
 }
 
@@ -231,11 +234,6 @@ func (e *SQLStore) Close() error {
 // GetQueries returns a new sqlitegolem.Queries instance for autocommit operations
 func (e *SQLStore) GetQueries() *sqlitegolem.Queries {
 	return sqlitegolem.New(e.readDB)
-}
-
-// GetQueries returns a new sqlitegolem.Queries instance for autocommit operations
-func (e *SQLStore) GetWriteQueries() *sqlitegolem.Queries {
-	return sqlitegolem.New(e.writeDB)
 }
 
 func (e *SQLStore) GetProcessingStatus(ctx context.Context, networkID string) (*sqlitegolem.GetProcessingStatusRow, error) {
@@ -294,6 +292,9 @@ func (e *SQLStore) SnapSyncToBlock(
 ) (err error) {
 	log.Info("snap syncing to block start", "blockNumber", blockNumber, "blockHash", blockHash.Hex())
 	defer log.Info("snap syncing to block end", "blockNumber", blockNumber, "blockHash", blockHash.Hex())
+
+	e.lock.Lock()
+	defer e.lock.Unlock()
 
 	tx, err := e.writeDB.BeginTx(ctx, nil)
 	if err != nil {
@@ -432,6 +433,9 @@ func (e *SQLStore) SnapSyncToBlock(
 func (e *SQLStore) InsertBlock(ctx context.Context, blockWal BlockWal, networkID string) (err error) {
 	log.Info("processing block", "block", blockWal.BlockInfo.Number)
 	defer log.Info("processing block end", "block", blockWal.BlockInfo.Number)
+
+	e.lock.Lock()
+	defer e.lock.Unlock()
 
 	tx, err := e.writeDB.BeginTx(ctx, nil)
 	if err != nil {
@@ -793,12 +797,20 @@ func (e *SQLStore) QueryEntitiesInternalIterator(
 ) error {
 	log.Info("Executing query", "query", query, "args", args)
 
+	e.lock.RLock()
+	defer e.lock.RUnlock()
+
 	// Begin a read-only transaction for consistency
 	tx, err := e.readDB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback() // Safe to call even after commit
+
+	_, err = tx.ExecContext(ctx, "PRAGMA temp_store = memory")
+	if err != nil {
+		return fmt.Errorf("failed to set temp store mode: %w", err)
+	}
 
 	txDB := sqlitegolem.New(tx)
 
