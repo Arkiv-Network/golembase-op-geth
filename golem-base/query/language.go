@@ -2,6 +2,7 @@ package query
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/alecthomas/participle/v2"
@@ -438,8 +439,9 @@ func (e *AndRHS) Evaluate(b *QueryBuilder) string {
 
 // EqualExpr can be either an equality or a parenthesized expression.
 type EqualExpr struct {
-	Paren  *Paren    `parser:"  @@"`
-	Assign *Equality `parser:"| @@"`
+	Paren     *Paren     `parser:"  @@"`
+	Assign    *Equality  `parser:"| @@"`
+	Inclusion *Inclusion `parser:"| @@"`
 
 	LessThan           *LessThan           `parser:"| @@"`
 	LessOrEqualThan    *LessOrEqualThan    `parser:"| @@"`
@@ -498,6 +500,10 @@ func (e *EqualExpr) invert() *EqualExpr {
 		return &EqualExpr{Assign: e.Assign.invert()}
 	}
 
+	if e.Inclusion != nil {
+		return &EqualExpr{Inclusion: e.Inclusion.invert()}
+	}
+
 	panic("This should not happen!")
 }
 
@@ -528,6 +534,10 @@ func (e *EqualExpr) Evaluate(b *QueryBuilder) string {
 
 	if e.Assign != nil {
 		return e.Assign.Evaluate(b)
+	}
+
+	if e.Inclusion != nil {
+		return e.Inclusion.Evaluate(b)
 	}
 
 	panic("This should not happen!")
@@ -884,10 +894,93 @@ func (e *Equality) Evaluate(b *QueryBuilder) string {
 	}
 }
 
+type Inclusion struct {
+	Var    string `parser:"(@Ident | @Key | @Owner | @Expiration)"`
+	IsNot  bool   `parser:"(@('NOT'|'not')? ('IN'|'in'))"`
+	Values Values `parser:"@@"`
+}
+
+func (e *Inclusion) invert() *Inclusion {
+	return &Inclusion{
+		Var:    e.Var,
+		IsNot:  !e.IsNot,
+		Values: e.Values,
+	}
+}
+
+func (e *Inclusion) Evaluate(b *QueryBuilder) string {
+	if len(e.Values.Strings) > 0 {
+
+		values := make([]any, 0, len(e.Values.Strings)+1)
+		values = append(values, e.Var)
+		for _, value := range e.Values.Strings {
+			if e.Var == "$owner" || e.Var == "$key" {
+				values = append(values, strings.ToLower(value))
+			} else {
+				values = append(values, value)
+			}
+		}
+
+		paramStr := strings.Join(slices.Repeat([]string{"?"}, len(e.Values.Strings)), ", ")
+
+		condition := fmt.Sprintf("a.value IN (%s)", paramStr)
+		if e.IsNot {
+			condition = fmt.Sprintf("a.value NOT IN (%s)", paramStr)
+		}
+
+		return b.createAnnotationQuery(
+			"string_annotations",
+			strings.Join(
+				[]string{
+					"a.annotation_key = ?",
+					"AND",
+					condition,
+				},
+				" ",
+			),
+			values...,
+		)
+
+	} else {
+
+		values := make([]any, 0, len(e.Values.Numbers)+1)
+		values = append(values, e.Var)
+		for _, value := range e.Values.Numbers {
+			values = append(values, value)
+		}
+
+		paramStr := strings.Join(slices.Repeat([]string{"?"}, len(e.Values.Numbers)), ", ")
+
+		condition := fmt.Sprintf("a.value IN (%s)", paramStr)
+		if e.IsNot {
+			condition = fmt.Sprintf("a.value NOT IN (%s)", paramStr)
+		}
+
+		return b.createAnnotationQuery(
+			"numeric_annotations",
+			strings.Join(
+				[]string{
+					"a.annotation_key = ?",
+					"AND",
+					condition,
+				},
+				" ",
+			),
+			values...,
+		)
+
+	}
+}
+
 // Value is a literal value (a number or a string).
 type Value struct {
 	String *string `parser:"  (@String | @EntityKey | @Address)"`
 	Number *uint64 `parser:"| @Number"`
+}
+
+type Values struct {
+	Strings []string `parser:"  '(' (@String | @EntityKey | @Address)+ ')'"`
+	Numbers []uint64 `parser:"| '(' @Number+ ')'"`
 }
 
 var Parser = participle.MustBuild[TopLevel](
