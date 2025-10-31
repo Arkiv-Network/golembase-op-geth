@@ -367,7 +367,7 @@ func extractArkivOperations(
 		oldExpiresAtU256 := uint256.NewInt(0).SetBytes(l.Data[:32])
 		oldExpiresAt := oldExpiresAtU256.Uint64()
 
-		newExpiresAtU256 := uint256.NewInt(0).SetBytes(l.Data[32:])
+		newExpiresAtU256 := uint256.NewInt(0).SetBytes(l.Data[32:64])
 		newExpiresAt := newExpiresAtU256.Uint64()
 
 		ex := ExtendBTL{
