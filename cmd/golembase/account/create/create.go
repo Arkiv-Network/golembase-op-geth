@@ -41,7 +41,7 @@ func Create() *cli.Command {
 				return fmt.Errorf("failed to stat walletPath %s: %w", walletPath, err)
 			}
 
-			password, err := GetPasswordFromStdinOrPrompt()
+			password, err := GetPasswordFromEnvStdinOrPrompt()
 			if err != nil {
 				return fmt.Errorf("failed to create password: %w", err)
 			}
@@ -67,9 +67,14 @@ func Create() *cli.Command {
 	}
 }
 
-// GetPasswordFromStdinOrPrompt reads a password from stdin if piped, or interactively if in a terminal
+// GetPasswordFromEnvStdinOrPrompt first checks if the password is set in the environment variable WALLET_PASSWORD, then reads a password from stdin if piped, or interactively if in a terminal
 // confirming that the passwords match
-func GetPasswordFromStdinOrPrompt() (string, error) {
+func GetPasswordFromEnvStdinOrPrompt() (string, error) {
+	password, ok := os.LookupEnv("WALLET_PASSWORD")
+	if ok {
+		return password, nil
+	}
+
 	// Check if input is coming from a terminal
 	if term.IsTerminal(int(syscall.Stdin)) {
 

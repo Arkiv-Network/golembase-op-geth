@@ -1,2 +1,2 @@
-op-geth: bash -c "rm -rf /tmp/golembase.wal/*; exec go run ../cmd/geth --dev --http --http.api 'eth,web3,net,debug,golembase' --verbosity 3 --http.addr '0.0.0.0' --http.port 8545 --http.corsdomain '*' --http.vhosts '*' --ws --ws.addr '0.0.0.0' --ws.port 8545"
+op-geth: bash -c "rm -rf /tmp/golembase.wal/*; exec go run ../cmd/geth --dev --http --http.api 'eth,web3,net,debug,golembase,arkiv' --verbosity 3 --http.addr '0.0.0.0' --http.port 8545 --http.corsdomain '*' --http.vhosts '*' --ws --ws.addr '0.0.0.0' --ws.port 8545"
 rpcplorer: NODE_URL=http://localhost:8545 ./script/run_rpcplorer.sh

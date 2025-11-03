@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/golem-base/address"
+	arkivlogs "github.com/ethereum/go-ethereum/golem-base/logs"
 	"github.com/ethereum/go-ethereum/golem-base/storagetx"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -239,7 +240,7 @@ func Create() *cli.Command {
 			}
 
 			for _, log := range receipt.Logs {
-				if log.Topics[0] == storagetx.GolemBaseStorageEntityCreated {
+				if log.Topics[0] == arkivlogs.ArkivEntityCreated {
 					fmt.Println("Entity created", "key", log.Topics[1])
 				}
 			}

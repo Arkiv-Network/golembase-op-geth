@@ -640,13 +640,17 @@ func (pool *LegacyPool) ValidateTxBasics(tx *types.Transaction) error {
 
 	if pool.disableNonGolembaseTransactions {
 		to := tx.To()
-		if to == nil {
+
+		switch {
+		case to == nil:
 			return ErrNonGolembaseTransaction
+		case *to == address.GolemBaseStorageProcessorAddress:
+			return nil
+		case *to == address.ArkivProcessorAddress:
+			return nil
+
 		}
 
-		if *to != address.GolemBaseStorageProcessorAddress {
-			return ErrNonGolembaseTransaction
-		}
 	}
 
 	opts := &txpool.ValidationOptions{

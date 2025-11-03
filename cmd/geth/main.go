@@ -99,6 +99,7 @@ var (
 		utils.TransactionHistoryFlag,
 		utils.ChainHistoryFlag,
 		utils.LogHistoryFlag,
+		utils.ArkivHistoricBlocksFlag,
 		utils.LogNoHistoryFlag,
 		utils.LogExportCheckpointsFlag,
 		utils.StateHistoryFlag,

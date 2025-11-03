@@ -44,7 +44,7 @@ func Integrity() *cli.Command {
 
 			for entityHash := range allentities.Iterate(db) {
 				fmt.Println("checking", entityHash)
-				err = entity.Delete(db, entityHash)
+				_, err = entity.Delete(db, entityHash)
 				if err != nil {
 					fmt.Println("error deleting", err)
 				}

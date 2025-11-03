@@ -7,7 +7,7 @@ Feature: Storage Transaction Validation
     And there are no duplicate annotation keys
     When I validate the transaction
     Then the validation should succeed
-    
+
   Scenario: Create operation with zero BTL
     Given I have a storage transaction with a create operation
     And the create operation has BTL set to 0
@@ -34,7 +34,7 @@ Feature: Storage Transaction Validation
     And the create operation has a string annotation with key starting with "$"
     When I validate the transaction
     Then the validation should fail
-    And the error should mention "Invalid annotation identifier"
+    And the error should mention "invalid annotation identifier"
 
   Scenario: Create operation with duplicate string annotation keys
     Given I have a storage transaction with a create operation
@@ -82,14 +82,14 @@ Feature: Storage Transaction Validation
     And the create operation has a string annotation with key containing special characters like "@" or "#"
     When I validate the transaction
     Then the validation should fail
-    And the error should mention "Invalid annotation identifier"
+    And the error should mention "invalid annotation identifier"
 
   Scenario: Invalid annotation key starting with number
     Given I have a storage transaction with a create operation
     And the create operation has a string annotation with key starting with a number
     When I validate the transaction
     Then the validation should fail
-    And the error should mention "Invalid annotation identifier"
+    And the error should mention "invalid annotation identifier"
 
   Scenario: Empty transaction validation
     Given I have an empty storage transaction

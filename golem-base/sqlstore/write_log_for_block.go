@@ -11,13 +11,17 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/golem-base/address"
+	"github.com/ethereum/go-ethereum/golem-base/logs"
 	"github.com/ethereum/go-ethereum/golem-base/storagetx"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/allentities"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
+	"github.com/klauspost/compress/zstd"
 )
+
+var decoder, _ = zstd.NewReader(nil)
 
 func WriteLogForBlockSqlite(
 	sqlStore *SQLStore,
@@ -98,7 +102,7 @@ func WriteLogForBlockSqlite(
 						yield(nil, fmt.Errorf("failed to get entity metadata for key %s: %w", entityKey.Hex(), err))
 						return
 					}
-					payload := entity.GetPayload(statedb, entityKey)
+					payload := entity.GetCompressedPayload(statedb, entityKey)
 
 					if !yield(&struct {
 						Key      common.Hash
@@ -154,9 +158,14 @@ func WriteLogForBlockSqlite(
 			Operations: []Operation{},
 		}
 
-		for i, tx := range txns {
-			receipt := receipts[i]
+		for txIx, tx := range txns {
+			receipt := receipts[txIx]
 			if receipt.Status == types.ReceiptStatusFailed {
+				continue
+			}
+
+			// quick fix to unblock kaolin
+			if len(tx.Data()) == 0 {
 				continue
 			}
 
@@ -167,23 +176,50 @@ func WriteLogForBlockSqlite(
 
 			switch {
 			case tx.Type() == types.DepositTxType:
+				delIx := uint64(0)
 				for _, l := range receipt.Logs {
-					if len(l.Topics) != 2 {
+					if len(l.Topics) != 3 {
 						continue
 					}
 
-					if l.Topics[0] != storagetx.GolemBaseStorageEntityDeleted {
+					if l.Topics[0] != logs.ArkivEntityExpired {
 						continue
 					}
 
 					key := l.Topics[1]
 
 					wal.Operations = append(wal.Operations, Operation{
-						Delete: &key,
+						Delete: &Delete{
+							EntityKey:        key,
+							TransactionIndex: uint64(txIx),
+							OperationIndex:   delIx,
+						},
 					})
+					delIx += 1
 
 				}
-				// create
+
+			case toAddr == address.ArkivProcessorAddress:
+
+				d, err := decoder.DecodeAll(tx.Data(), nil)
+				if err != nil {
+					return fmt.Errorf("failed to decode compressed storage transaction: %w", err)
+				}
+
+				stx := storagetx.ArkivTransaction{}
+				err = rlp.DecodeBytes(d, &stx)
+				if err != nil {
+					return fmt.Errorf("failed to decode storage transaction: %w", err)
+				}
+
+				from, err := types.Sender(signer, tx)
+				if err != nil {
+					return fmt.Errorf("failed to get sender of create transaction %s: %w", tx.Hash().Hex(), err)
+				}
+
+				ops := extractArkivOperations(&stx, txIx, receipt, from)
+				wal.Operations = append(wal.Operations, ops...)
+
 			case toAddr == address.GolemBaseStorageProcessorAddress:
 
 				stx := storagetx.StorageTransaction{}
@@ -192,102 +228,13 @@ func WriteLogForBlockSqlite(
 					return fmt.Errorf("failed to decode storage transaction: %w", err)
 				}
 
-				createdLogs := []*types.Log{}
-				updatedLogs := []*types.Log{}
-				extendedLogs := []*types.Log{}
-
-				for _, log := range receipt.Logs {
-					if len(log.Topics) < 2 {
-						continue
-					}
-
-					if log.Topics[0] == storagetx.GolemBaseStorageEntityCreated {
-						createdLogs = append(createdLogs, log)
-					}
-
-					if log.Topics[0] == storagetx.GolemBaseStorageEntityUpdated {
-						updatedLogs = append(updatedLogs, log)
-					}
-
-					if log.Topics[0] == storagetx.GolemBaseStorageEntityBTLExtended {
-						extendedLogs = append(extendedLogs, log)
-					}
-
+				from, err := types.Sender(signer, tx)
+				if err != nil {
+					return fmt.Errorf("failed to get sender of create transaction %s: %w", tx.Hash().Hex(), err)
 				}
 
-				for i, create := range stx.Create {
-
-					l := createdLogs[i]
-					key := l.Topics[1]
-					expiresAtBlockU256 := uint256.NewInt(0).SetBytes(l.Data)
-					expiresAtBlock := expiresAtBlockU256.Uint64()
-
-					from, err := types.Sender(signer, tx)
-					if err != nil {
-						return fmt.Errorf("failed to get sender of create transaction %s: %w", tx.Hash().Hex(), err)
-					}
-
-					cr := Create{
-						EntityKey:          key,
-						ExpiresAtBlock:     expiresAtBlock,
-						Payload:            create.Payload,
-						StringAnnotations:  create.StringAnnotations,
-						NumericAnnotations: create.NumericAnnotations,
-						Owner:              from,
-					}
-
-					wal.Operations = append(wal.Operations, Operation{
-						Create: &cr,
-					})
-
-				}
-
-				for _, del := range stx.Delete {
-					wal.Operations = append(wal.Operations, Operation{
-						Delete: &del,
-					})
-				}
-
-				for i, update := range stx.Update {
-
-					log := updatedLogs[i]
-					key := log.Topics[1]
-					expiresAtBlockU256 := uint256.NewInt(0).SetBytes(log.Data)
-					expiresAtBlock := expiresAtBlockU256.Uint64()
-
-					ur := Update{
-						EntityKey:          key,
-						ExpiresAtBlock:     expiresAtBlock,
-						Payload:            update.Payload,
-						StringAnnotations:  update.StringAnnotations,
-						NumericAnnotations: update.NumericAnnotations,
-					}
-
-					wal.Operations = append(wal.Operations, Operation{
-						Update: &ur,
-					})
-				}
-
-				for i, extend := range stx.Extend {
-
-					log := extendedLogs[i]
-
-					oldExpiresAtU256 := uint256.NewInt(0).SetBytes(log.Data[:32])
-					oldExpiresAt := oldExpiresAtU256.Uint64()
-
-					newExpiresAtU256 := uint256.NewInt(0).SetBytes(log.Data[32:])
-					newExpiresAt := newExpiresAtU256.Uint64()
-
-					ex := ExtendBTL{
-						EntityKey:    extend.EntityKey,
-						OldExpiresAt: oldExpiresAt,
-						NewExpiresAt: newExpiresAt,
-					}
-
-					wal.Operations = append(wal.Operations, Operation{
-						Extend: &ex,
-					})
-				}
+				ops := extractArkivOperations(stx.ConvertToArkiv(), txIx, receipt, from)
+				wal.Operations = append(wal.Operations, ops...)
 
 			default:
 			}
@@ -316,4 +263,143 @@ func WriteLogForBlockSqlite(
 	}
 
 	return nil
+}
+
+var encoder, _ = zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedBetterCompression))
+
+func extractArkivOperations(
+	stx *storagetx.ArkivTransaction,
+	txIx int,
+	receipt *types.Receipt,
+	from common.Address,
+) []Operation {
+	ops := []Operation{}
+
+	createdLogs := []*types.Log{}
+	updatedLogs := []*types.Log{}
+	extendedLogs := []*types.Log{}
+	changedOwnerLogs := []*types.Log{}
+
+	for _, log := range receipt.Logs {
+		if len(log.Topics) < 2 {
+			continue
+		}
+
+		if log.Topics[0] == logs.ArkivEntityCreated {
+			createdLogs = append(createdLogs, log)
+		}
+
+		if log.Topics[0] == logs.ArkivEntityUpdated {
+			updatedLogs = append(updatedLogs, log)
+		}
+
+		if log.Topics[0] == logs.ArkivEntityBTLExtended {
+			extendedLogs = append(extendedLogs, log)
+		}
+
+		if log.Topics[0] == logs.ArkivEntityOwnerChanged {
+			changedOwnerLogs = append(changedOwnerLogs, log)
+		}
+	}
+
+	for opIx, create := range stx.Create {
+
+		l := createdLogs[opIx]
+		key := l.Topics[1]
+		expiresAtBlockU256 := uint256.NewInt(0).SetBytes(l.Data[:32])
+		expiresAtBlock := expiresAtBlockU256.Uint64()
+
+		cr := Create{
+			EntityKey:          key,
+			ExpiresAtBlock:     expiresAtBlock,
+			Payload:            encoder.EncodeAll(create.Payload, nil),
+			ContentType:        create.ContentType,
+			StringAnnotations:  create.StringAnnotations,
+			NumericAnnotations: create.NumericAnnotations,
+			Owner:              from,
+			TransactionIndex:   uint64(txIx),
+			OperationIndex:     uint64(opIx),
+		}
+
+		ops = append(ops, Operation{
+			Create: &cr,
+		})
+
+	}
+
+	for opIx, del := range stx.Delete {
+		ops = append(ops, Operation{
+			Delete: &Delete{
+				EntityKey:        del,
+				TransactionIndex: uint64(txIx),
+				OperationIndex:   uint64(opIx),
+			},
+		})
+	}
+
+	for opIx, update := range stx.Update {
+
+		l := updatedLogs[opIx]
+		key := l.Topics[1]
+		expiresAtBlockU256 := uint256.NewInt(0).SetBytes(l.Data[32:64])
+		expiresAtBlock := expiresAtBlockU256.Uint64()
+
+		ur := Update{
+			EntityKey:          key,
+			ExpiresAtBlock:     expiresAtBlock,
+			Payload:            encoder.EncodeAll(update.Payload, nil),
+			ContentType:        update.ContentType,
+			StringAnnotations:  update.StringAnnotations,
+			NumericAnnotations: update.NumericAnnotations,
+			TransactionIndex:   uint64(txIx),
+			OperationIndex:     uint64(opIx),
+		}
+
+		ops = append(ops, Operation{
+			Update: &ur,
+		})
+	}
+
+	for opIx, extend := range stx.Extend {
+
+		l := extendedLogs[opIx]
+
+		oldExpiresAtU256 := uint256.NewInt(0).SetBytes(l.Data[:32])
+		oldExpiresAt := oldExpiresAtU256.Uint64()
+
+		newExpiresAtU256 := uint256.NewInt(0).SetBytes(l.Data[32:64])
+		newExpiresAt := newExpiresAtU256.Uint64()
+
+		ex := ExtendBTL{
+			EntityKey:        extend.EntityKey,
+			OldExpiresAt:     oldExpiresAt,
+			NewExpiresAt:     newExpiresAt,
+			TransactionIndex: uint64(txIx),
+			OperationIndex:   uint64(opIx),
+		}
+
+		ops = append(ops, Operation{
+			Extend: &ex,
+		})
+	}
+
+	for opIx, changeOwner := range stx.ChangeOwner {
+
+		log := changedOwnerLogs[opIx]
+
+		owner := common.BytesToAddress(log.Topics[3].Bytes())
+
+		co := ChangeOwner{
+			EntityKey:        changeOwner.EntityKey,
+			Owner:            owner,
+			TransactionIndex: uint64(txIx),
+			OperationIndex:   uint64(opIx),
+		}
+
+		ops = append(ops, Operation{
+			ChangeOwner: &co,
+		})
+	}
+
+	return ops
 }

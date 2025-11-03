@@ -12,14 +12,11 @@ import (
 
 type StateAccess = storageutil.StateAccess
 
-var GolemDBAddress = address.GolemBaseStorageProcessorAddress
-
 func SetBlob(db StateAccess, key common.Hash, value []byte) {
-
 	keyInt := new(uint256.Int).SetBytes(key[:])
 
 	for v := range BytesTo32ByteSequence(value) {
-		db.SetState(GolemDBAddress, keyInt.Bytes32(), v)
+		db.SetState(address.ArkivProcessorAddress, keyInt.Bytes32(), v)
 		keyInt.AddUint64(keyInt, 1)
 	}
 }
@@ -58,7 +55,7 @@ func BytesTo32ByteSequence(value []byte) iter.Seq[common.Hash] {
 }
 
 func GetBlob(db StateAccess, key common.Hash) []byte {
-	head := db.GetState(GolemDBAddress, key)
+	head := db.GetState(address.ArkivProcessorAddress, key)
 	if head == emptyHash {
 		return []byte{}
 	}
@@ -85,7 +82,7 @@ func GetBlob(db StateAccess, key common.Hash) []byte {
 
 	// Read data chunks
 	for remaining > 0 {
-		chunk := db.GetState(GolemDBAddress, keyInt.Bytes32())
+		chunk := db.GetState(address.ArkivProcessorAddress, keyInt.Bytes32())
 		size := min(remaining, 32)
 		value = append(value, chunk[:size]...)
 		remaining -= size
@@ -98,13 +95,13 @@ func GetBlob(db StateAccess, key common.Hash) []byte {
 var emptyHash = common.Hash{}
 
 func DeleteBlob(db StateAccess, key common.Hash) {
-	head := db.GetState(GolemDBAddress, key)
+	head := db.GetState(address.ArkivProcessorAddress, key)
 	if head == emptyHash {
 		return
 	}
 
 	// Clear the head slot
-	db.SetState(GolemDBAddress, key, emptyHash)
+	db.SetState(address.ArkivProcessorAddress, key, emptyHash)
 
 	// For small payloads (≤31 bytes), we only need to clear the head slot
 	if head[31]&0x01 == 0 {
@@ -121,7 +118,7 @@ func DeleteBlob(db StateAccess, key common.Hash) {
 	// Clear all data slots (skip the length slot which was already cleared)
 	keyInt.AddUint64(keyInt, 1)
 	for range numberOfSlots {
-		db.SetState(GolemDBAddress, keyInt.Bytes32(), emptyHash)
+		db.SetState(address.ArkivProcessorAddress, keyInt.Bytes32(), emptyHash)
 		keyInt.AddUint64(keyInt, 1)
 	}
 }

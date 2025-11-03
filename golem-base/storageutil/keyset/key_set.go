@@ -19,7 +19,7 @@ type StateAccess = storageutil.StateAccess
 
 var zeroHash = common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000")
 var oneUint256 = new(uint256.Int).SetUint64(1)
-var MapKeyPrefix = []byte("golemBase.keyset.map")
+var MapKeyPrefix = []byte("arkivKeysetMap")
 
 // ContainsValue checks if the given value exists in the set identified by setKey.
 // It returns true if the value is present in the set, false otherwise.

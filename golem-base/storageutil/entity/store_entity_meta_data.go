@@ -19,6 +19,8 @@ func StoreEntityMetaData(access StateAccess, key common.Hash, emd EntityMetaData
 		return fmt.Errorf("failed to encode entity meta data: %w", err)
 	}
 
-	stateblob.SetBlob(access, hash, buf.Bytes())
+	compressed := encoder.EncodeAll(buf.Bytes(), nil)
+
+	stateblob.SetBlob(access, hash, compressed)
 	return nil
 }

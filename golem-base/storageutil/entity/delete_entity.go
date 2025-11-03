@@ -5,38 +5,32 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/allentities"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entitiesofowner"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/entityexpiration"
 )
 
-func Delete(access StateAccess, toDelete common.Hash) error {
+func Delete(access StateAccess, toDelete common.Hash) (common.Address, error) {
 
 	if !allentities.Contains(access, toDelete) {
-		return fmt.Errorf("entity %s does not exist", toDelete)
+		return common.Address{}, fmt.Errorf("entity %s does not exist", toDelete)
 	}
 
 	md, err := GetEntityMetaData(access, toDelete)
 	if err != nil {
-		return fmt.Errorf("failed to get entity meta data: %w", err)
+		return common.Address{}, fmt.Errorf("failed to get entity meta data: %w", err)
 	}
 
 	err = allentities.RemoveEntity(access, toDelete)
 	if err != nil {
-		return fmt.Errorf("failed to remove entity from all entities: %w", err)
+		return common.Address{}, fmt.Errorf("failed to remove entity from all entities: %w", err)
 	}
 
 	err = entityexpiration.RemoveFromEntitiesToExpire(access, md.ExpiresAtBlock, toDelete)
 	if err != nil {
-		return fmt.Errorf("failed to remove entity from entities to expire: %w", err)
-	}
-
-	err = entitiesofowner.RemoveEntity(access, md.Owner, toDelete)
-	if err != nil {
-		return fmt.Errorf("failed to remove entity from owner entities: %w", err)
+		return common.Address{}, fmt.Errorf("failed to remove entity from entities to expire: %w", err)
 	}
 
 	DeletePayload(access, toDelete)
 	DeleteEntityMetadata(access, toDelete)
 
-	return nil
+	return md.Owner, nil
 }

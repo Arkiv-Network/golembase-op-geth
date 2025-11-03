@@ -2,144 +2,236 @@ package eth
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/golem-base/arkivtype"
 	"github.com/ethereum/go-ethereum/golem-base/golemtype"
-	"github.com/ethereum/go-ethereum/golem-base/query"
 	"github.com/ethereum/go-ethereum/golem-base/sqlstore"
-	"github.com/ethereum/go-ethereum/golem-base/storageaccounting"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 )
 
 // golemBaseAPI offers helper utils
 type golemBaseAPI struct {
-	eth   *Ethereum
-	store *sqlstore.SQLStore
+	*arkivAPI
 }
 
 func NewGolemBaseAPI(eth *Ethereum, store *sqlstore.SQLStore) *golemBaseAPI {
 	return &golemBaseAPI{
-		eth:   eth,
-		store: store,
+		arkivAPI: NewArkivAPI(eth, store),
 	}
 }
 
 func (api *golemBaseAPI) GetStorageValue(ctx context.Context, key common.Hash) ([]byte, error) {
-	payload, err := api.store.GetQueries().GetEntityPayload(ctx, key.Hex())
+	q := fmt.Sprintf(`$key = %s`, key)
+
+	entities, err := api.arkivAPI.Query(
+		ctx,
+		q,
+		&QueryOptions{
+			IncludeData: &IncludeData{
+				Payload: true,
+			},
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute query: %w", err)
+	}
+
+	if len(entities.Data) != 1 {
+		return nil, fmt.Errorf("expected a single result but got %d", len(entities.Data))
+	}
+
+	var metadata arkivtype.EntityData
+
+	err = json.Unmarshal(entities.Data[0], &metadata)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal entity data: %w", err)
+	}
+
+	return []byte(metadata.Value), nil
+}
+
+// GetAllEntityKeys returns all entity keys in the storage.
+func (api *golemBaseAPI) GetAllEntityKeys(ctx context.Context) ([]common.Hash, error) {
+	entities, err := api.store.GetAllEntityKeys(ctx, api.eth.blockchain.CurrentBlock().Number.Uint64())
 	if err != nil {
 		return nil, err
 	}
-	return payload, nil
 
+	return entities, nil
 }
 
 func (api *golemBaseAPI) GetEntityMetaData(ctx context.Context, key common.Hash) (*entity.EntityMetaData, error) {
-	metadata, err := api.store.GetEntityMetaData(ctx, key)
+	rows, err := api.arkivAPI.Query(
+		ctx,
+		fmt.Sprintf("$key = %s", key),
+		&QueryOptions{
+			IncludeData: &IncludeData{
+				Annotations: true,
+				Key:         true,
+				Expiration:  true,
+				Owner:       true,
+				Payload:     true,
+			},
+		},
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	return metadata, nil
+	if len(rows.Data) != 1 {
+		return nil, fmt.Errorf("expected a single result row but got %d", len(rows.Data))
+	}
+
+	var metadata arkivtype.EntityData
+
+	err = json.Unmarshal(rows.Data[0], &metadata)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal entity data: %w", err)
+	}
+
+	return &entity.EntityMetaData{
+		ExpiresAtBlock:     *metadata.ExpiresAt,
+		Owner:              *metadata.Owner,
+		StringAnnotations:  metadata.StringAnnotations,
+		NumericAnnotations: metadata.NumericAnnotations,
+	}, nil
 }
 
-func (api *golemBaseAPI) GetEntitiesToExpireAtBlock(ctx context.Context, blockNumber uint64) ([]common.Hash, error) {
-	entities, err := api.store.GetEntitiesToExpireAtBlock(ctx, blockNumber)
+func (api *golemBaseAPI) GetEntitiesToExpireAtBlock(ctx context.Context, expirationBlock uint64) ([]common.Hash, error) {
+	q := fmt.Sprintf(`$expiration = %d`, expirationBlock)
+	entities, err := api.arkivAPI.Query(ctx, q, &QueryOptions{
+		IncludeData: &IncludeData{
+			Key: true,
+		},
+	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
 
-	return entities, nil
+	results := make([]common.Hash, 0, len(entities.Data))
+	for _, ed := range entities.Data {
+
+		var metadata arkivtype.EntityData
+
+		err = json.Unmarshal(ed, &metadata)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal entity data: %w", err)
+		}
+
+		results = append(results, *metadata.Key)
+	}
+
+	return results, nil
 }
 
 func (api *golemBaseAPI) GetEntitiesForStringAnnotationValue(ctx context.Context, key, value string) ([]common.Hash, error) {
-	entities, err := api.store.GetEntitiesForStringAnnotationValue(ctx, key, value)
+	q := fmt.Sprintf(`%s = "%s"`, key, value)
+	entities, err := api.arkivAPI.Query(ctx, q, &QueryOptions{
+		IncludeData: &IncludeData{
+			Key: true,
+		},
+	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
 
-	return entities, nil
+	results := make([]common.Hash, 0, len(entities.Data))
+	for _, ed := range entities.Data {
+
+		var metadata arkivtype.EntityData
+
+		err = json.Unmarshal(ed, &metadata)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal entity data: %w", err)
+		}
+		results = append(results, *metadata.Key)
+	}
+
+	return results, nil
 }
 
 func (api *golemBaseAPI) GetEntitiesForNumericAnnotationValue(ctx context.Context, key string, value uint64) ([]common.Hash, error) {
-	entities, err := api.store.GetEntitiesForNumericAnnotationValue(ctx, key, value)
+	q := fmt.Sprintf(`%s = %d`, key, value)
+	entities, err := api.arkivAPI.Query(ctx, q, &QueryOptions{
+		IncludeData: &IncludeData{
+			Key: true,
+		},
+	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
 
-	return entities, nil
+	results := make([]common.Hash, 0, len(entities.Data))
+	for _, ed := range entities.Data {
+		var metadata arkivtype.EntityData
+
+		err = json.Unmarshal(ed, &metadata)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal entity data: %w", err)
+		}
+		results = append(results, *metadata.Key)
+	}
+
+	return results, nil
 }
 
 func (api *golemBaseAPI) QueryEntities(ctx context.Context, req string) ([]golemtype.SearchResult, error) {
-
-	expr, err := query.Parse(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse query: %w", err)
-	}
-
-	query := expr.Evaluate()
-
-	entities, err := api.store.QueryEntities(ctx, query.Query, query.Args...)
+	entities, err := api.Query(ctx, req, &QueryOptions{
+		IncludeData: &IncludeData{
+			Key:     true,
+			Payload: true,
+		},
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
 
 	searchResults := make([]golemtype.SearchResult, 0)
 
-	for _, key := range entities {
-		v, err := api.GetStorageValue(ctx, key)
+	for _, ed := range entities.Data {
+
+		var metadata arkivtype.EntityData
+
+		err = json.Unmarshal(ed, &metadata)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get storage value for key %s: %w", key.Hex(), err)
+			return nil, fmt.Errorf("failed to unmarshal entity data: %w", err)
 		}
+
 		searchResults = append(searchResults, golemtype.SearchResult{
-			Key:   key,
-			Value: v,
+			Key:   *metadata.Key,
+			Value: metadata.Value,
 		})
 	}
+
+	api.GetEntityCount(ctx)
 
 	return searchResults, nil
 }
 
-// GetEntityCount returns the total number of entities in the storage.
-func (api *golemBaseAPI) GetEntityCount(ctx context.Context) (uint64, error) {
-	count, err := api.store.GetEntityCount(ctx)
-	if err != nil {
-		return 0, err
-	}
-
-	return count, nil
-}
-
-// GetAllEntityKeys returns all entity keys in the storage.
-func (api *golemBaseAPI) GetAllEntityKeys(ctx context.Context) ([]common.Hash, error) {
-	entities, err := api.store.GetAllEntityKeys(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return entities, nil
-}
-
 func (api *golemBaseAPI) GetEntitiesOfOwner(ctx context.Context, owner common.Address) ([]common.Hash, error) {
-	entities, err := api.store.GetEntitiesOfOwner(ctx, owner)
-	if err == nil {
-		return entities, nil
-	}
-
-	return entities, nil
-}
-
-func (api *golemBaseAPI) GetNumberOfUsedSlots() (*hexutil.Big, error) {
-	header := api.eth.blockchain.CurrentBlock()
-	stateDb, err := api.eth.BlockChain().StateAt(header.Root)
+	q := fmt.Sprintf(`$owner = %s`, owner)
+	entities, err := api.arkivAPI.Query(ctx, q, &QueryOptions{
+		IncludeData: &IncludeData{
+			Key: true,
+		},
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get state: %w", err)
+		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
 
-	counter := storageaccounting.GetNumberOfUsedSlots(stateDb)
-	counterAsBigInt := big.NewInt(0)
-	counter.IntoBig(&counterAsBigInt)
-	return (*hexutil.Big)(counterAsBigInt), nil
+	results := make([]common.Hash, 0, len(entities.Data))
+	for _, ed := range entities.Data {
+		var metadata arkivtype.EntityData
+
+		err = json.Unmarshal(ed, &metadata)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal entity data: %w", err)
+		}
+		results = append(results, *metadata.Key)
+	}
+
+	return results, nil
 }

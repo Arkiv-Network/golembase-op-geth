@@ -18,3 +18,11 @@ func ApplySchema(ctx context.Context, db *sql.DB) error {
 	}
 	return nil
 }
+
+func ApplySchemaTx(ctx context.Context, tx *sql.Tx) error {
+	_, err := tx.ExecContext(ctx, schema)
+	if err != nil {
+		return fmt.Errorf("failed to apply schema: %w", err)
+	}
+	return nil
+}

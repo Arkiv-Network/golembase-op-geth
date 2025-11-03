@@ -8,6 +8,7 @@ import "io"
 func (obj *EntityMetaData) EncodeRLP(_w io.Writer) error {
 	w := rlp.NewEncoderBuffer(_w)
 	_tmp0 := w.List()
+	w.WriteString(obj.ContentType)
 	w.WriteUint64(obj.ExpiresAtBlock)
 	_tmp1 := w.List()
 	for _, _tmp2 := range obj.StringAnnotations {
@@ -26,6 +27,10 @@ func (obj *EntityMetaData) EncodeRLP(_w io.Writer) error {
 	}
 	w.ListEnd(_tmp4)
 	w.WriteBytes(obj.Owner[:])
+	w.WriteUint64(obj.CreatedAtBlock)
+	w.WriteUint64(obj.LastModifiedAtBlock)
+	w.WriteUint64(obj.TransactionIndex)
+	w.WriteUint64(obj.OperationIndex)
 	w.ListEnd(_tmp0)
 	return w.Flush()
 }

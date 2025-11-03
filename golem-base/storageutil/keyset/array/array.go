@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/golem-base/address"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil"
 	"github.com/holiman/uint256"
 )
@@ -18,7 +19,7 @@ func NewArray(db storageutil.StateAccess, address common.Hash) *Array {
 }
 
 func (a *Array) Size() *uint256.Int {
-	return new(uint256.Int).SetBytes32(a.db.GetState(storageutil.GolemDBAddress, a.address).Bytes())
+	return new(uint256.Int).SetBytes32(a.db.GetState(address.ArkivProcessorAddress, a.address).Bytes())
 }
 
 var ErrIndexOutOfBounds = errors.New("index out of bounds")
@@ -33,7 +34,7 @@ func (a *Array) Get(index *uint256.Int) (common.Hash, error) {
 	startAddress.Add(startAddress, index)
 	startAddress.AddUint64(startAddress, 1)
 
-	return a.db.GetState(storageutil.GolemDBAddress, common.Hash(startAddress.Bytes32())), nil
+	return a.db.GetState(address.ArkivProcessorAddress, common.Hash(startAddress.Bytes32())), nil
 }
 
 func (a *Array) Append(value common.Hash) {
@@ -43,10 +44,10 @@ func (a *Array) Append(value common.Hash) {
 	newElementAddress.Add(newElementAddress, size)
 	newElementAddress.AddUint64(newElementAddress, 1)
 
-	a.db.SetState(storageutil.GolemDBAddress, common.Hash(newElementAddress.Bytes32()), value)
+	a.db.SetState(address.ArkivProcessorAddress, common.Hash(newElementAddress.Bytes32()), value)
 
 	size.AddUint64(size, 1)
-	a.db.SetState(storageutil.GolemDBAddress, a.address, size.Bytes32())
+	a.db.SetState(address.ArkivProcessorAddress, a.address, size.Bytes32())
 }
 
 var ErrArrayEmpty = errors.New("array is empty")
@@ -58,12 +59,12 @@ func (a *Array) RemoveLast() error {
 	}
 
 	size.SubUint64(size, 1)
-	a.db.SetState(storageutil.GolemDBAddress, a.address, size.Bytes32())
+	a.db.SetState(address.ArkivProcessorAddress, a.address, size.Bytes32())
 
 	valueAddress := new(uint256.Int).SetBytes32(a.address.Bytes())
 	valueAddress.Add(valueAddress, size)
 	valueAddress.AddUint64(valueAddress, 1)
-	a.db.SetState(storageutil.GolemDBAddress, common.Hash(valueAddress.Bytes32()), common.Hash{})
+	a.db.SetState(address.ArkivProcessorAddress, common.Hash(valueAddress.Bytes32()), common.Hash{})
 
 	return nil
 }
@@ -74,11 +75,11 @@ func (a *Array) Set(index *uint256.Int, value common.Hash) error {
 		return ErrIndexOutOfBounds
 	}
 
-	address := new(uint256.Int).SetBytes32(a.address.Bytes())
-	address.Add(address, index)
-	address.AddUint64(address, 1)
+	addr := new(uint256.Int).SetBytes32(a.address.Bytes())
+	addr.Add(addr, index)
+	addr.AddUint64(addr, 1)
 
-	a.db.SetState(storageutil.GolemDBAddress, common.Hash(address.Bytes32()), value)
+	a.db.SetState(address.ArkivProcessorAddress, common.Hash(addr.Bytes32()), value)
 
 	return nil
 }
@@ -102,8 +103,8 @@ func (a *Array) Clear() {
 	lastAddress.Add(lastAddress, size)
 	lastAddress.AddUint64(lastAddress, 1)
 
-	for address := new(uint256.Int).SetBytes32(a.address.Bytes()); address.Cmp(lastAddress) < 0; address.AddUint64(address, 1) {
-		a.db.SetState(storageutil.GolemDBAddress, common.Hash(address.Bytes32()), common.Hash{})
+	for addr := new(uint256.Int).SetBytes32(a.address.Bytes()); addr.Cmp(lastAddress) < 0; addr.AddUint64(addr, 1) {
+		a.db.SetState(address.ArkivProcessorAddress, common.Hash(addr.Bytes32()), common.Hash{})
 	}
 
 }

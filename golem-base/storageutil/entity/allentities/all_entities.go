@@ -21,7 +21,7 @@ type StateAccess = storageutil.StateAccess
 // AllEntitiesKey is the storage key that identifies the global registry of all entities.
 // This key is used as the set identifier when interacting with the keyset package.
 // It's derived from a unique string to avoid collisions with other storage keys.
-var AllEntitiesKey = crypto.Keccak256Hash([]byte("golemBase.allEntities"))
+var AllEntitiesKey = crypto.Keccak256Hash([]byte("arkivAllEntities"))
 
 // AddEntity adds a new entity hash to the global registry.
 func AddEntity(db StateAccess, hash common.Hash) error {

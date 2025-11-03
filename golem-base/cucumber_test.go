@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -20,12 +21,18 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/golem-base/address"
+	"github.com/ethereum/go-ethereum/golem-base/arkivtype"
 	"github.com/ethereum/go-ethereum/golem-base/golemtype"
+	arkivlogs "github.com/ethereum/go-ethereum/golem-base/logs"
 	"github.com/ethereum/go-ethereum/golem-base/storagetx"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity"
 	"github.com/ethereum/go-ethereum/golem-base/testutil"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/holiman/uint256"
+	"github.com/klauspost/compress/zstd"
 	"github.com/spf13/pflag" // godog v0.11.0 and later
 )
 
@@ -37,6 +44,8 @@ var opts = godog.Options{
 
 	Paths: []string{"features"},
 }
+
+var encoder, _ = zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedBetterCompression))
 
 func init() {
 	godog.BindCommandLineFlags("godog.", &opts)
@@ -111,7 +120,7 @@ func TestMain(m *testing.M) {
 
 	// // Optional: Run `testing` package's logic besides godog.
 	// if st := m.Run(); st > status {
-	// 	status = st
+	//	status = st
 	// }
 
 	cleanupCompiled()
@@ -140,6 +149,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the payload of the entity should be changed$`, thePayloadOfTheEntityShouldBeChanged)
 	ctx.Step(`^I submit a transaction to update the entity, changing the annotations$`, iSubmitATransactionToUpdateTheEntityChangingTheAnnotations)
 	ctx.Step(`^the annotations of the entity should be changed$`, theAnnotationsOfTheEntityShouldBeChanged)
+	ctx.Step(`^the annotations of the entity at the previous block should not be changed$`, theAnnotationsOfTheEntityAtThePreviousBlockShouldNotBeChanged)
 	ctx.Step(`^I submit a transaction to update the entity, changing the btl of the entity$`, iSubmitATransactionToUpdateTheEntityChangingTheBtlOfTheEntity)
 	ctx.Step(`^the btl of the entity should be changed$`, theBtlOfTheEntityShouldBeChanged)
 	ctx.Step(`^submit a transaction to create an entity of (\d+)K$`, submitATransactionToCreateAnEntityOfK)
@@ -155,6 +165,9 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the list of all entities should be empty$`, theListOfAllEntitiesShouldBeEmpty)
 	ctx.Step(`^I search for entities with the invalid query$`, iSearchForEntitiesWithTheInvalidQuery)
 	ctx.Step(`^I should see an error containing "([^"]*)"$`, iShouldSeeAnErrorContaining)
+	ctx.Step(`^I search for entities without requesting columns$`, iSearchForEntitiesWithoutColumns)
+	ctx.Step(`^I search for all entities$`, iSearchForAllEntities)
+	ctx.Step(`^the response would be empty$`, theResponseWouldBeEmpty)
 	ctx.Step(`^the entity should be in the list of entities of the owner$`, theEntityShouldBeInTheListOfEntitiesOfTheOwner)
 	ctx.Step(`^the sender should be the owner of the entity$`, theSenderShouldBeTheOwnerOfTheEntity)
 	ctx.Step(`^the owner should not have any entities$`, theOwnerShouldNotHaveAnyEntities)
@@ -173,6 +186,15 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I update the entity$`, iUpdateTheEntity)
 	ctx.Step(`^I trace the transaction that created the entity$`, iTraceTheTransactionThatCreatedTheEntity)
 	ctx.Step(`^the trace should be empty$`, theTraceShouldBeEmpty)
+
+	ctx.Step(`^the entity update log should be recorded$`, theEntityUpdateLogShouldBeRecorded)
+	ctx.Step(`^the entity delete log should be recorded$`, theEntityDeleteLogShouldBeRecorded)
+	ctx.Step(`^the entity extend log should be recorded$`, theEntityExtendLogShouldBeRecorded)
+
+	ctx.Step(`^I submit a transaction to change the owner of the entity$`, iSubmitATransactionToChangeTheOwnerOfTheEntity)
+	ctx.Step(`^the entity owner change log should be recorded$`, theEntityOwnerChangeLogShouldBeRecorded)
+	ctx.Step(`^the owner of the entity should be changed$`, theOwnerOfTheEntityShouldBeChanged)
+	ctx.Step(`^I submit a transaction to change the owner of the entity by non-owner$`, iSubmitATransactionToChangeTheOwnerOfTheEntityByNonowner)
 
 	// Storage Transaction Validation Steps
 	ctx.Step(`^I have a storage transaction with create, update, delete, and extend operations$`, iHaveAStorageTransactionWithCreateUpdateDeleteAndExtendOperations)
@@ -205,6 +227,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^another create operation has valid BTL and annotations$`, anotherCreateOperationHasValidBTLAndAnnotations)
 	ctx.Step(`^the error should mention "([^"]*)" and "([^"]*)"$`, theErrorShouldMentionAnd)
 	ctx.Step(`^the error should mention the first validation error encountered$`, theErrorShouldMentionTheFirstValidationErrorEncountered)
+	ctx.Step(`^I submit a storage transaction with no playload$`, iSubmitAStorageTransactionWithNoPlayload)
+	ctx.Step(`^I submit a storage transaction with unparseable data$`, iSubmitAStorageTransactionWithUnparseableData)
 
 }
 
@@ -232,6 +256,98 @@ func iShouldSeeAnErrorContaining(ctx context.Context, expectedSubstring string) 
 
 	if !strings.Contains(w.LastError.Error(), expectedSubstring) {
 		return fmt.Errorf("error %w does not contain expected substring: %s", w.LastError, expectedSubstring)
+	}
+
+	return nil
+}
+
+func iSearchForEntitiesWithoutColumns(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+
+	response := arkivtype.QueryResponse{}
+	err := w.GethInstance.RPCClient.CallContext(
+		ctx,
+		&response,
+		"arkiv_query",
+		`foo = "bar"`,
+		eth.QueryOptions{
+			IncludeData: &eth.IncludeData{},
+		},
+	)
+
+	w.LastError = err
+
+	edList := []arkivtype.EntityData{}
+	for _, d := range response.Data {
+		ed := arkivtype.EntityData{}
+
+		err = json.Unmarshal(d, &ed)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal entity data: %w", err)
+		}
+		edList = append(edList, ed)
+	}
+
+	w.ArkivSearchResult = edList
+
+	return nil
+}
+
+func iSearchForAllEntities(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+
+	response := arkivtype.QueryResponse{}
+	err := w.GethInstance.RPCClient.CallContext(
+		ctx,
+		&response,
+		"arkiv_query",
+		`$all`,
+		eth.QueryOptions{},
+	)
+
+	w.LastError = err
+
+	edList := []arkivtype.EntityData{}
+	for _, d := range response.Data {
+		ed := arkivtype.EntityData{}
+
+		err = json.Unmarshal(d, &ed)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal entity data: %w", err)
+		}
+		edList = append(edList, ed)
+	}
+
+	w.ArkivSearchResult = edList
+
+	return nil
+}
+
+func theResponseWouldBeEmpty(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+
+	for _, ed := range w.ArkivSearchResult {
+		if ed.ContentType != nil {
+			return fmt.Errorf("expected content type to be nil, but got: %s", *ed.ContentType)
+		}
+		if ed.Value != nil {
+			return fmt.Errorf("expected value to be nil, but got array of length %d", len(ed.Value))
+		}
+		if ed.ExpiresAt != nil {
+			return fmt.Errorf("expected expiry to be nil, but got: %d", *ed.ExpiresAt)
+		}
+		if ed.Key != nil {
+			return fmt.Errorf("expected key to be nil, but got: %s", ed.Key.Hex())
+		}
+		if ed.Owner != nil {
+			return fmt.Errorf("expected owner to be nil, but got: %s", ed.Owner.Hex())
+		}
+		if ed.StringAnnotations != nil {
+			return fmt.Errorf("expected string annotations to be nil, but got array of length %d", len(ed.StringAnnotations))
+		}
+		if ed.NumericAnnotations != nil {
+			return fmt.Errorf("expected numericAnnotations to be nil, but got array of length %d", len(ed.NumericAnnotations))
+		}
 	}
 
 	return nil
@@ -272,6 +388,10 @@ func submitATransactionToCreateAnEntity(ctx context.Context) error {
 
 }
 
+func hashToAddress(hash common.Hash) common.Address {
+	return common.Address(hash[12:])
+}
+
 func theEntityShouldBeCreated(ctx context.Context) error {
 
 	w := testutil.GetWorld(ctx)
@@ -279,6 +399,62 @@ func theEntityShouldBeCreated(ctx context.Context) error {
 
 	if len(receipt.Logs) == 0 {
 		return fmt.Errorf("no logs found in receipt")
+	}
+
+	logs := receipt.Logs
+
+	if len(logs) != 2 {
+		return fmt.Errorf("expected 2 logs, got %d", len(logs))
+	}
+
+	oldCreatedLog := logs[0]
+
+	if oldCreatedLog.Topics[0] != storagetx.GolemBaseStorageEntityCreated {
+		return fmt.Errorf("expected GolemBaseStorageEntityCreated log, got %s", oldCreatedLog.Topics[0])
+	}
+
+	oldLogData := oldCreatedLog.Data
+
+	if len(oldLogData) != 32 {
+		return fmt.Errorf("expected old log data to be 32 bytes, got %d", len(oldLogData))
+	}
+
+	expiresAtBlockU256 := uint256.NewInt(0).SetBytes(oldLogData[:32])
+	oldExpiresAtBlock := expiresAtBlockU256.Uint64()
+
+	expiresAtBlockExpected := receipt.BlockNumber.Uint64() + 100
+
+	if oldExpiresAtBlock != expiresAtBlockExpected {
+		return fmt.Errorf("expected expires at block to be %d, got %d", expiresAtBlockExpected, oldExpiresAtBlock)
+	}
+
+	newCreatedLog := logs[1]
+
+	if newCreatedLog.Topics[0] != arkivlogs.ArkivEntityCreated {
+		return fmt.Errorf("expected ArkivEntityCreated log, got %s", newCreatedLog.Topics[0])
+	}
+
+	if newCreatedLog.Topics[1] != w.CreatedEntityKey {
+		return fmt.Errorf("expected arkiv created entity key to be %s, got %s", w.CreatedEntityKey, newCreatedLog.Topics[1])
+	}
+
+	newLogData := newCreatedLog.Data
+
+	if len(newLogData) != 64 {
+		return fmt.Errorf("expected new log data to be 64 bytes, got %d", len(newLogData))
+	}
+
+	newExpiresAtBlockU256 := uint256.NewInt(0).SetBytes(newLogData[:32])
+	newExpiresAtBlock := newExpiresAtBlockU256.Uint64()
+
+	if newExpiresAtBlock != expiresAtBlockExpected {
+		return fmt.Errorf("expected archiv expires at block to be %d, got %d", expiresAtBlockExpected, newExpiresAtBlock)
+	}
+
+	owner := hashToAddress(newCreatedLog.Topics[2])
+
+	if owner != w.FundedAccount.Address {
+		return fmt.Errorf("expected owner to be %s, got %s", w.FundedAccount.Address.Hex(), owner.Hex())
 	}
 
 	key := receipt.Logs[0].Topics[1]
@@ -301,6 +477,33 @@ func theEntityShouldBeCreated(ctx context.Context) error {
 		return fmt.Errorf("unexpected storage value: %s", string(v))
 	}
 
+	var e arkivtype.QueryResponse
+	err = rcpClient.CallContext(
+		ctx,
+		&e,
+		"arkiv_query",
+		fmt.Sprintf(`$key = %s`, key.Hex()),
+		struct{}{},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to get storage value: %w", err)
+	}
+
+	ed := arkivtype.EntityData{}
+
+	err = json.Unmarshal(e.Data[0], &ed)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal entity data: %w", err)
+	}
+
+	if string(ed.Value) != "test payload" {
+		return fmt.Errorf("unexpected storage value: %s", string(ed.Value))
+	}
+
+	if string(*ed.ContentType) != "application/octet-stream" {
+		return fmt.Errorf("unexpected content-type: %s", string(*ed.ContentType))
+	}
+
 	return nil
 
 }
@@ -319,17 +522,16 @@ func theExpiryOfTheEntityShouldBeRecorded(ctx context.Context) error {
 
 	blockNumber256 := uint256.NewInt(0).SetBytes(receipt.Logs[0].Data)
 
-	err := rcpClient.CallContext(
+	key := receipt.Logs[0].Topics[1]
+
+	if err := rcpClient.CallContext(
 		ctx,
 		&toExpire,
 		"golembase_getEntitiesToExpireAtBlock",
 		blockNumber256.Uint64(),
-	)
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("failed to get entities to expire: %w", err)
 	}
-
-	key := receipt.Logs[0].Topics[1]
 
 	if len(toExpire) != 1 {
 		return fmt.Errorf("unexpected number of entities to expire: %d (expected 1)", len(toExpire))
@@ -339,36 +541,89 @@ func theExpiryOfTheEntityShouldBeRecorded(ctx context.Context) error {
 		return fmt.Errorf("unexpected entity to expire: %s (expected %s)", toExpire[0].Hex(), key.Hex())
 	}
 
+	var result arkivtype.QueryResponse
+	if err := rcpClient.CallContext(
+		ctx,
+		&result,
+		"arkiv_query",
+		fmt.Sprintf("$expiration = %d", blockNumber256.Uint64()),
+		struct{}{},
+	); err != nil {
+		return fmt.Errorf("failed to get entities to expire: %w", err)
+	}
+
+	if len(result.Data) != 1 {
+		return fmt.Errorf("unexpected number of entities to expire: %d (expected 1)", len(result.Data))
+	}
+
+	ed := arkivtype.EntityData{}
+
+	err := json.Unmarshal(result.Data[0], &ed)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal entity data: %w", err)
+	}
+
+	if *ed.Key != key {
+		return fmt.Errorf("unexpected entity to expire: %s (expected %s)", ed.Key.Hex(), key.Hex())
+	}
+
 	return nil
 }
 
 func iShouldBeAbleToRetrieveTheEntityByTheStringAnnotation(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 	receipt := w.LastReceipt
-
-	toExpire := []common.Hash{}
+	key := receipt.Logs[0].Topics[1]
 
 	rcpClient := w.GethInstance.RPCClient
 
-	err := rcpClient.CallContext(
+	keys := []common.Hash{}
+	if err := rcpClient.CallContext(
 		ctx,
-		&toExpire,
+		&keys,
 		"golembase_getEntitiesForStringAnnotationValue",
 		"test_key",
 		"test_value",
+	); err != nil {
+		return fmt.Errorf("failed to get entities by string anotation: %w", err)
+	}
+
+	if len(keys) != 1 {
+		return fmt.Errorf("unexpected number of entities retrieved: %d (expected 1)", len(keys))
+	}
+
+	if keys[0] != key {
+		return fmt.Errorf("unexpected retrieved entity: %s (expected %s)", keys[0].Hex(), key.Hex())
+	}
+
+	entities := arkivtype.QueryResponse{}
+	err := rcpClient.CallContext(
+		ctx,
+		&entities,
+		"arkiv_query",
+		`test_key = "test_value"`,
+		struct{}{},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to get entities by string anotation: %w", err)
 	}
 
-	key := receipt.Logs[0].Topics[1]
-
-	if len(toExpire) != 1 {
-		return fmt.Errorf("unexpected number of entities retrieved: %d (expected 1)", len(toExpire))
+	if len(entities.Data) != 1 {
+		return fmt.Errorf("unexpected number of entities retrieved: %d (expected 1)", len(entities.Data))
 	}
 
-	if toExpire[0] != key {
-		return fmt.Errorf("unexpected retrieved entity: %s (expected %s)", toExpire[0].Hex(), key.Hex())
+	ed := arkivtype.EntityData{}
+
+	err = json.Unmarshal(entities.Data[0], &ed)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal entity data: %w", err)
+	}
+
+	if *ed.Key != key {
+		return fmt.Errorf("unexpected retrieved entity: %s (expected %s)", ed.Key.Hex(), key.Hex())
+	}
+	if *ed.ContentType != "application/octet-stream" {
+		return fmt.Errorf("unexpected content-type: %s (expected %s)", *ed.ContentType, "application/octet-stream")
 	}
 
 	return nil
@@ -377,30 +632,53 @@ func iShouldBeAbleToRetrieveTheEntityByTheStringAnnotation(ctx context.Context) 
 func iShouldBeAbleToRetrieveTheEntityByTheNumericAnnotation(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 	receipt := w.LastReceipt
-
-	toExpire := []common.Hash{}
-
+	key := receipt.Logs[0].Topics[1]
 	rcpClient := w.GethInstance.RPCClient
 
-	err := rcpClient.CallContext(
+	keys := []common.Hash{}
+	if err := rcpClient.CallContext(
 		ctx,
-		&toExpire,
+		&keys,
 		"golembase_getEntitiesForNumericAnnotationValue",
 		"test_number",
 		42,
+	); err != nil {
+		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
+	}
+
+	if len(keys) != 1 {
+		return fmt.Errorf("unexpected number of entities to retrieved: %d (expected 1)", len(keys))
+	}
+
+	if keys[0] != key {
+		return fmt.Errorf("unexpected retrieved entity: %s (expected %s)", keys[0].Hex(), key.Hex())
+	}
+
+	entities := arkivtype.QueryResponse{}
+	err := rcpClient.CallContext(
+		ctx,
+		&entities,
+		"arkiv_query",
+		"test_number = 42",
+		struct{}{},
 	)
 	if err != nil {
-		return fmt.Errorf("failed to get entities to by numeric annotation: %w", err)
+		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
 	}
 
-	key := receipt.Logs[0].Topics[1]
-
-	if len(toExpire) != 1 {
-		return fmt.Errorf("unexpected number of entities to retrieved: %d (expected 1)", len(toExpire))
+	if len(entities.Data) != 1 {
+		return fmt.Errorf("unexpected number of entities to retrieved: %d (expected 1)", len(entities.Data))
 	}
 
-	if toExpire[0] != key {
-		return fmt.Errorf("unexpected retrieved entity: %s (expected %s)", toExpire[0].Hex(), key.Hex())
+	ed := arkivtype.EntityData{}
+
+	err = json.Unmarshal(entities.Data[0], &ed)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal entity data: %w", err)
+	}
+
+	if *ed.Key != key {
+		return fmt.Errorf("unexpected retrieved entity: %s (expected %s)", ed.Key.Hex(), key.Hex())
 	}
 
 	return nil
@@ -483,32 +761,53 @@ func iHaveAnEntityWithStringAnnotations(ctx context.Context, payload string, ann
 
 func iSearchForEntitiesWithTheStringAnnotationEqualTo(ctx context.Context, key, value string) error {
 	w := testutil.GetWorld(ctx)
+	rcpClient := w.GethInstance.RPCClient
 
 	res := []golemtype.SearchResult{}
 
-	rcpClient := w.GethInstance.RPCClient
-
-	err := rcpClient.CallContext(
+	if err := rcpClient.CallContext(
 		ctx,
 		&res,
 		"golembase_queryEntities",
 		fmt.Sprintf(`%s="%s"`, key, value),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to get entities to by numeric annotation: %w", err)
+	); err != nil {
+		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
 	}
-
 	w.SearchResult = res
 
-	return nil
+	res2 := arkivtype.QueryResponse{}
+	err := rcpClient.CallContext(
+		ctx,
+		&res2,
+		"arkiv_query",
+		fmt.Sprintf(`%s="%s"`, key, value),
+		struct{}{},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
+	}
 
+	edList := []arkivtype.EntityData{}
+	for _, d := range res2.Data {
+		ed := arkivtype.EntityData{}
+
+		err = json.Unmarshal(d, &ed)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal entity data: %w", err)
+		}
+		edList = append(edList, ed)
+	}
+
+	w.ArkivSearchResult = edList
+
+	return nil
 }
 
 func iShouldFindEntity(ctx context.Context, count int) error {
 	w := testutil.GetWorld(ctx)
 
-	if len(w.SearchResult) != count {
-		return fmt.Errorf("unexpected number of entities retrieved: %d (expected %d)", len(w.SearchResult), count)
+	if len(w.ArkivSearchResult) != count {
+		return fmt.Errorf("unexpected number of entities retrieved: %d (expected %d)", len(w.ArkivSearchResult), count)
 	}
 
 	return nil
@@ -547,9 +846,6 @@ func iHaveAnEntityWithNumericAnnotations(ctx context.Context, payload string, an
 
 func iSearchForEntitiesWithTheNumericAnnotationEqualTo(ctx context.Context, key string, valueString string) error {
 	w := testutil.GetWorld(ctx)
-
-	res := []golemtype.SearchResult{}
-
 	rcpClient := w.GethInstance.RPCClient
 
 	value, err := strconv.ParseUint(valueString, 10, 64)
@@ -557,20 +853,42 @@ func iSearchForEntitiesWithTheNumericAnnotationEqualTo(ctx context.Context, key 
 		return fmt.Errorf("failed to parse numeric value: %w", err)
 	}
 
-	err = rcpClient.CallContext(
+	res := []golemtype.SearchResult{}
+	if err = rcpClient.CallContext(
 		ctx,
 		&res,
 		"golembase_queryEntities",
 		fmt.Sprintf(`%s=%d`, key, value),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to get entities to by numeric annotation: %w", err)
+	); err != nil {
+		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
 	}
-
 	w.SearchResult = res
 
-	return nil
+	res2 := arkivtype.QueryResponse{}
+	if err = rcpClient.CallContext(
+		ctx,
+		&res2,
+		"arkiv_query",
+		fmt.Sprintf(`%s=%d`, key, value),
+		struct{}{},
+	); err != nil {
+		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
+	}
 
+	edList := []arkivtype.EntityData{}
+	for _, d := range res2.Data {
+		ed := arkivtype.EntityData{}
+
+		err = json.Unmarshal(d, &ed)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal entity data: %w", err)
+		}
+		edList = append(edList, ed)
+	}
+
+	w.ArkivSearchResult = edList
+
+	return nil
 }
 
 func iHaveCreatedAnEntity(ctx context.Context) error {
@@ -668,18 +986,15 @@ func iSubmitATransactionToUpdateTheEntityChangingThePaylod(ctx context.Context) 
 
 func thePayloadOfTheEntityShouldBeChanged(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
-
 	rpcClient := w.GethInstance.RPCClient
 
 	var v []byte
-
-	err := rpcClient.CallContext(
+	if err := rpcClient.CallContext(
 		ctx,
 		&v,
 		"golembase_getStorageValue",
 		w.CreatedEntityKey,
-	)
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("failed to get storage value: %w", err)
 	}
 
@@ -687,8 +1002,38 @@ func thePayloadOfTheEntityShouldBeChanged(ctx context.Context) error {
 		return fmt.Errorf("unexpected storage value: %s", string(v))
 	}
 
-	return nil
+	entities := arkivtype.QueryResponse{}
+	err := rpcClient.CallContext(
+		ctx,
+		&entities,
+		"arkiv_query",
+		fmt.Sprintf("$key = %s", w.CreatedEntityKey),
+		struct{}{},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to get storage value: %w", err)
+	}
 
+	if len(entities.Data) != 1 {
+		return fmt.Errorf("unexpected number of entities to retrieved: %d (expected 1)", len(entities.Data))
+	}
+
+	ed := arkivtype.EntityData{}
+
+	err = json.Unmarshal(entities.Data[0], &ed)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal entity data: %w", err)
+	}
+
+	if string(ed.Value) != "new payload" {
+		return fmt.Errorf("unexpected storage value: %s", string(ed.Value))
+	}
+
+	if string(*ed.ContentType) != "application/octet-stream" {
+		return fmt.Errorf("unexpected content-type: %s", string(*ed.ContentType))
+	}
+
+	return nil
 }
 
 func iSubmitATransactionToUpdateTheEntityChangingTheAnnotations(ctx context.Context) error {
@@ -723,19 +1068,16 @@ func iSubmitATransactionToUpdateTheEntityChangingTheAnnotations(ctx context.Cont
 
 func theAnnotationsOfTheEntityShouldBeChanged(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
-
 	rpcClient := w.GethInstance.RPCClient
 
 	res := []golemtype.SearchResult{}
-
-	err := rpcClient.CallContext(
+	if err := rpcClient.CallContext(
 		ctx,
 		&res,
 		"golembase_queryEntities",
 		`test_key1="test_value1" && test_number1=43`,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to get entities to by numeric annotation: %w", err)
+	); err != nil {
+		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
 	}
 
 	if len(res) == 0 {
@@ -744,6 +1086,80 @@ func theAnnotationsOfTheEntityShouldBeChanged(ctx context.Context) error {
 
 	if res[0].Key != w.CreatedEntityKey {
 		return fmt.Errorf("expected entity hash %s but got %s", w.CreatedEntityKey.Hex(), res[0].Key.Hex())
+	}
+
+	res2 := arkivtype.QueryResponse{}
+	err := rpcClient.CallContext(
+		ctx,
+		&res2,
+		"arkiv_query",
+		`test_key1="test_value1" && test_number1=43`,
+		struct{}{},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
+	}
+
+	if len(res2.Data) == 0 {
+		return fmt.Errorf("could not find any result when searching by new annotations")
+	}
+
+	ed := arkivtype.EntityData{}
+
+	err = json.Unmarshal(res2.Data[0], &ed)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal entity data: %w", err)
+	}
+
+	if *ed.Key != w.CreatedEntityKey {
+		return fmt.Errorf("expected entity hash %s but got %s", w.CreatedEntityKey.Hex(), ed.Key.Hex())
+	}
+
+	return nil
+}
+
+func theAnnotationsOfTheEntityAtThePreviousBlockShouldNotBeChanged(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	rpcClient := w.GethInstance.RPCClient
+
+	res := arkivtype.QueryResponse{}
+
+	block, err := w.GethInstance.ETHClient.BlockNumber(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get block number: %w", err)
+	}
+
+	atBlock := block - 1
+	err = rpcClient.CallContext(
+		ctx,
+		&res,
+		"arkiv_query",
+		`test_key = "test_value" && test_number=42`,
+		eth.QueryOptions{
+			AtBlock: &atBlock,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
+	}
+
+	if len(res.Data) == 0 {
+		return fmt.Errorf("could not find any result when searching by new annotations")
+	}
+
+	ed := arkivtype.EntityData{}
+
+	err = json.Unmarshal(res.Data[0], &ed)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal entity data: %w", err)
+	}
+
+	if *ed.Key != w.CreatedEntityKey {
+		return fmt.Errorf(
+			"expected entity hash %s but got %s",
+			w.CreatedEntityKey.Hex(),
+			ed.Key.Hex(),
+		)
 	}
 
 	return nil
@@ -781,22 +1197,18 @@ func iSubmitATransactionToUpdateTheEntityChangingTheBtlOfTheEntity(ctx context.C
 func theBtlOfTheEntityShouldBeChanged(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 	receipt := w.LastReceipt
-
-	toExpire := []common.Hash{}
-
+	key := receipt.Logs[0].Topics[1]
 	rcpClient := w.GethInstance.RPCClient
 
-	err := rcpClient.CallContext(
+	toExpire := []common.Hash{}
+	if err := rcpClient.CallContext(
 		ctx,
 		&toExpire,
 		"golembase_getEntitiesToExpireAtBlock",
 		receipt.BlockNumber.Uint64()+200,
-	)
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("failed to get entities to expire: %w", err)
 	}
-
-	key := receipt.Logs[0].Topics[1]
 
 	if len(toExpire) != 1 {
 		return fmt.Errorf("unexpected number of entities to expire: %d (expected 1)", len(toExpire))
@@ -804,6 +1216,33 @@ func theBtlOfTheEntityShouldBeChanged(ctx context.Context) error {
 
 	if toExpire[0] != key {
 		return fmt.Errorf("unexpected entity to expire: %s (expected %s)", toExpire[0].Hex(), key.Hex())
+	}
+
+	entities := arkivtype.QueryResponse{}
+	err := rcpClient.CallContext(
+		ctx,
+		&entities,
+		"arkiv_query",
+		fmt.Sprintf("$expiration = %d", receipt.BlockNumber.Uint64()+200),
+		struct{}{},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to get entities to expire: %w", err)
+	}
+
+	if len(entities.Data) != 1 {
+		return fmt.Errorf("unexpected number of entities to expire: %d (expected 1)", len(entities.Data))
+	}
+
+	ed := arkivtype.EntityData{}
+
+	err = json.Unmarshal(entities.Data[0], &ed)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal entity data: %w", err)
+	}
+
+	if *ed.Key != key {
+		return fmt.Errorf("unexpected entity to expire: %s (expected %s)", ed.Key.Hex(), key.Hex())
 	}
 
 	return nil
@@ -852,22 +1291,43 @@ func theEntityCreationShouldNotFail(ctx context.Context) error {
 
 func iSearchForEntitiesWithTheQuery(ctx context.Context, queryDoc *godog.DocString) error {
 	w := testutil.GetWorld(ctx)
-
-	res := []golemtype.SearchResult{}
-
 	rcpClient := w.GethInstance.RPCClient
 
-	err := rcpClient.CallContext(
+	res := []golemtype.SearchResult{}
+	if err := rcpClient.CallContext(
 		ctx,
 		&res,
 		"golembase_queryEntities",
 		queryDoc.Content,
+	); err != nil {
+		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
+	}
+	w.SearchResult = res
+
+	res2 := arkivtype.QueryResponse{}
+	err := rcpClient.CallContext(
+		ctx,
+		&res2,
+		"arkiv_query",
+		queryDoc.Content,
+		struct{}{},
 	)
 	if err != nil {
-		return fmt.Errorf("failed to get entities to by numeric annotation: %w", err)
+		return fmt.Errorf("failed to get entities by numeric annotation: %w", err)
 	}
 
-	w.SearchResult = res
+	edList := []arkivtype.EntityData{}
+	for _, d := range res2.Data {
+		ed := arkivtype.EntityData{}
+
+		err = json.Unmarshal(d, &ed)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal entity data: %w", err)
+		}
+		edList = append(edList, ed)
+	}
+
+	w.ArkivSearchResult = edList
 
 	return nil
 }
@@ -1010,10 +1470,10 @@ func theExpiredEntityShouldBeDeleted(ctx context.Context) error {
 
 func theNumberOfEntitiesShouldBe(ctx context.Context, expected int) error {
 	w := testutil.GetWorld(ctx)
+	rpcClient := w.GethInstance.RPCClient
 
 	var count uint64
-	err := w.GethInstance.RPCClient.CallContext(ctx, &count, "golembase_getEntityCount")
-	if err != nil {
+	if err := rpcClient.CallContext(ctx, &count, "golembase_getEntityCount"); err != nil {
 		return fmt.Errorf("failed to get entity count: %w", err)
 	}
 
@@ -1021,24 +1481,68 @@ func theNumberOfEntitiesShouldBe(ctx context.Context, expected int) error {
 		return fmt.Errorf("expected %d entities, but got %d", expected, count)
 	}
 
-	return nil
+	entities := arkivtype.QueryResponse{}
+	if err := rpcClient.CallContext(
+		ctx,
+		&entities,
+		"arkiv_query",
+		fmt.Sprintf("$owner = %s || $owner != %s",
+			"0x4200000000000000000000000000000000000015",
+			"0x4200000000000000000000000000000000000015",
+		),
+		struct{}{},
+	); err != nil {
+		return fmt.Errorf("failed to get entity count: %w", err)
+	}
 
+	if len(entities.Data) != expected {
+		return fmt.Errorf("expected %d entities, but got %d", expected, len(entities.Data))
+	}
+
+	return nil
 }
 
 func theEntityShouldBeInTheListOfAllEntities(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
+	rpcClient := w.GethInstance.RPCClient
 
 	var entityKeys []common.Hash
-	err := w.GethInstance.RPCClient.CallContext(ctx, &entityKeys, "golembase_getAllEntityKeys")
-	if err != nil {
+	if err := rpcClient.CallContext(ctx, &entityKeys, "golembase_getAllEntityKeys"); err != nil {
 		return fmt.Errorf("failed to get all entity keys: %w", err)
 	}
 
-	found := false
-	for _, key := range entityKeys {
-		if key == w.CreatedEntityKey {
+	found := slices.Contains(entityKeys, w.CreatedEntityKey)
+
+	if !found {
+		return fmt.Errorf("entity with key %s not found in the list of all entities", w.CreatedEntityKey.Hex())
+	}
+
+	entities := arkivtype.QueryResponse{}
+	if err := rpcClient.CallContext(
+		ctx,
+		&entities,
+		"arkiv_query",
+		fmt.Sprintf("$owner = %s || $owner != %s",
+			"0x4200000000000000000000000000000000000015",
+			"0x4200000000000000000000000000000000000015",
+		),
+		struct{}{},
+	); err != nil {
+		return fmt.Errorf("failed to get entity count: %w", err)
+	}
+
+	found = false
+	for _, entity := range entities.Data {
+
+		ed := arkivtype.EntityData{}
+
+		err := json.Unmarshal(entity, &ed)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal entity data: %w", err)
+		}
+
+		if *ed.Key == w.CreatedEntityKey {
 			found = true
-			break
 		}
 	}
 
@@ -1051,14 +1555,32 @@ func theEntityShouldBeInTheListOfAllEntities(ctx context.Context) error {
 
 func theListOfAllEntitiesShouldBeEmpty(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
+	rpcClient := w.GethInstance.RPCClient
 
 	var entityKeys []common.Hash
-	err := w.GethInstance.RPCClient.CallContext(ctx, &entityKeys, "golembase_getAllEntityKeys")
-	if err != nil {
+	if err := rpcClient.CallContext(ctx, &entityKeys, "golembase_getAllEntityKeys"); err != nil {
 		return fmt.Errorf("failed to get all entity keys: %w", err)
 	}
 
 	if len(entityKeys) != 0 {
+		return fmt.Errorf("expected empty list of entities, but got %d entities", len(entityKeys))
+	}
+
+	entities := arkivtype.QueryResponse{}
+	if err := rpcClient.CallContext(
+		ctx,
+		&entities,
+		"arkiv_query",
+		fmt.Sprintf("$owner = %s || $owner != %s",
+			"0x4200000000000000000000000000000000000015",
+			"0x4200000000000000000000000000000000000015",
+		),
+		struct{}{},
+	); err != nil {
+		return fmt.Errorf("failed to get entity count: %w", err)
+	}
+
+	if len(entities.Data) != 0 {
 		return fmt.Errorf("expected empty list of entities, but got %d entities", len(entityKeys))
 	}
 
@@ -1067,18 +1589,50 @@ func theListOfAllEntitiesShouldBeEmpty(ctx context.Context) error {
 
 func theEntityShouldBeInTheListOfEntitiesOfTheOwner(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
+	rpcClient := w.GethInstance.RPCClient
 
 	var entityKeys []common.Hash
-	err := w.GethInstance.RPCClient.CallContext(ctx, &entityKeys, "golembase_getEntitiesOfOwner", w.FundedAccount.Address)
-	if err != nil {
+	if err := rpcClient.CallContext(
+		ctx,
+		&entityKeys,
+		"golembase_getEntitiesOfOwner",
+		w.FundedAccount.Address,
+	); err != nil {
 		return fmt.Errorf("failed to get entities of owner: %w", err)
 	}
 
-	found := false
-	for _, key := range entityKeys {
-		if key == w.CreatedEntityKey {
+	found := slices.Contains(entityKeys, w.CreatedEntityKey)
+
+	if !found {
+		return fmt.Errorf("entity with key %s not found in the list of entities of the owner", w.CreatedEntityKey.Hex())
+	}
+
+	entities := arkivtype.QueryResponse{}
+	if err := rpcClient.CallContext(
+		ctx,
+		&entities,
+		"arkiv_query",
+		fmt.Sprintf(
+			"$owner = %s",
+			w.FundedAccount.Address,
+		),
+		struct{}{},
+	); err != nil {
+		return fmt.Errorf("failed to get entity count: %w", err)
+	}
+
+	found = false
+	for _, entity := range entities.Data {
+
+		ed := arkivtype.EntityData{}
+
+		err := json.Unmarshal(entity, &ed)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal entity data: %w", err)
+		}
+
+		if *ed.Key == w.CreatedEntityKey {
 			found = true
-			break
 		}
 	}
 
@@ -1091,11 +1645,10 @@ func theEntityShouldBeInTheListOfEntitiesOfTheOwner(ctx context.Context) error {
 
 func theSenderShouldBeTheOwnerOfTheEntity(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
+	rpcClient := w.GethInstance.RPCClient
 
 	var ap entity.EntityMetaData
-
-	err := w.GethInstance.RPCClient.CallContext(ctx, &ap, "golembase_getEntityMetaData", w.CreatedEntityKey.Hex())
-	if err != nil {
+	if err := rpcClient.CallContext(ctx, &ap, "golembase_getEntityMetaData", w.CreatedEntityKey.Hex()); err != nil {
 		return fmt.Errorf("failed to get entity metadata: %w", err)
 	}
 
@@ -1103,17 +1656,50 @@ func theSenderShouldBeTheOwnerOfTheEntity(ctx context.Context) error {
 		return fmt.Errorf("expected owner to be %s, but got %s", w.FundedAccount.Address.Hex(), ap.Owner.Hex())
 	}
 
+	entities := arkivtype.QueryResponse{}
+	err := rpcClient.CallContext(
+		ctx,
+		&entities,
+		"arkiv_query",
+		fmt.Sprintf(
+			"$key = %s",
+			w.CreatedEntityKey.Hex(),
+		),
+		struct{}{},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to get entity count: %w", err)
+	}
+
+	if len(entities.Data) != 1 {
+		return fmt.Errorf("unexpected number of entities retrieved: %d (expected 1)", len(entities.Data))
+	}
+
+	ed := arkivtype.EntityData{}
+
+	err = json.Unmarshal(entities.Data[0], &ed)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal entity data: %w", err)
+	}
+
+	if *ed.Owner != w.FundedAccount.Address {
+		return fmt.Errorf("expected owner to be %s, but got %s", w.FundedAccount.Address.Hex(), ed.Owner.Hex())
+	}
+
 	return nil
 }
 
 func theOwnerShouldNotHaveAnyEntities(ctx context.Context) error {
-
 	w := testutil.GetWorld(ctx)
+	rpcClient := w.GethInstance.RPCClient
 
 	var entityKeys []common.Hash
-
-	err := w.GethInstance.RPCClient.CallContext(ctx, &entityKeys, "golembase_getEntitiesOfOwner", w.FundedAccount.Address)
-	if err != nil {
+	if err := rpcClient.CallContext(
+		ctx,
+		&entityKeys,
+		"golembase_getEntitiesOfOwner",
+		w.FundedAccount.Address,
+	); err != nil {
 		return fmt.Errorf("failed to get entity metadata: %w", err)
 	}
 
@@ -1121,8 +1707,25 @@ func theOwnerShouldNotHaveAnyEntities(ctx context.Context) error {
 		return fmt.Errorf("expected 0 entities, but got %d", len(entityKeys))
 	}
 
-	return nil
+	entities := arkivtype.QueryResponse{}
+	if err := rpcClient.CallContext(
+		ctx,
+		&entities,
+		"arkiv_query",
+		fmt.Sprintf(
+			"$owner = %s",
+			w.FundedAccount.Address,
+		),
+		struct{}{},
+	); err != nil {
+		return fmt.Errorf("failed to get entity count: %w", err)
+	}
 
+	if len(entities.Data) != 0 {
+		return fmt.Errorf("expected 0 entities, but got %d", len(entityKeys))
+	}
+
+	return nil
 }
 
 func iSubmitATransactionToExtendBTLOfTheEntityByBlocks(ctx context.Context, blockCount int) error {
@@ -1280,18 +1883,33 @@ func theExpiredEntitiesShouldBeDeleted(ctx context.Context) error {
 
 	rcpClient := w.GethInstance.RPCClient
 
-	err := rcpClient.CallContext(
+	if err := rcpClient.CallContext(
 		ctx,
 		&entities,
 		"golembase_getEntitiesOfOwner",
 		w.FundedAccount.Address,
-	)
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("failed to get entities of owner: %w", err)
 	}
 
 	if len(entities) != 0 {
 		return fmt.Errorf("expected 0 entities, but got %d", len(entities))
+	}
+
+	arkivEntities := arkivtype.QueryResponse{}
+
+	if err := rcpClient.CallContext(
+		ctx,
+		&arkivEntities,
+		"arkiv_query",
+		fmt.Sprintf(`$owner = %s`, w.FundedAccount.Address),
+		struct{}{},
+	); err != nil {
+		return fmt.Errorf("failed to get entities of owner: %w", err)
+	}
+
+	if len(arkivEntities.Data) != 0 {
+		return fmt.Errorf("expected 0 entities, but got %d", len(arkivEntities.Data))
 	}
 
 	return nil
@@ -1302,13 +1920,40 @@ func iSearchForEntitiesOfAnOwner(ctx context.Context) error {
 	w := testutil.GetWorld(ctx)
 
 	res := []golemtype.SearchResult{}
+	if err := w.GethInstance.RPCClient.CallContext(
+		ctx,
+		&res,
+		"golembase_queryEntities",
+		fmt.Sprintf(`$owner = %s`, w.FundedAccount.Address.Hex()),
+	); err != nil {
+		return fmt.Errorf("failed to get entities of owner: %w", err)
+	}
+	w.SearchResult = res
 
-	err := w.GethInstance.RPCClient.CallContext(ctx, &res, "golembase_queryEntities", fmt.Sprintf(`$owner="%s"`, w.FundedAccount.Address.Hex()))
+	res2 := arkivtype.QueryResponse{}
+	err := w.GethInstance.RPCClient.CallContext(
+		ctx,
+		&res2,
+		"arkiv_query",
+		fmt.Sprintf(`$owner = %s`, w.FundedAccount.Address.Hex()),
+		struct{}{},
+	)
 	if err != nil {
 		return fmt.Errorf("failed to get entities of owner: %w", err)
 	}
 
-	w.SearchResult = res
+	edList := []arkivtype.EntityData{}
+	for _, d := range res2.Data {
+		ed := arkivtype.EntityData{}
+
+		err = json.Unmarshal(d, &ed)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal entity data: %w", err)
+		}
+		edList = append(edList, ed)
+	}
+
+	w.ArkivSearchResult = edList
 
 	return nil
 }
@@ -1392,9 +2037,9 @@ func iTraceTheTransactionThatCreatedTheEntity(ctx context.Context) error {
 
 	trace := json.RawMessage{}
 
-	tracerOptions := map[string]interface{}{
+	tracerOptions := map[string]any{
 		"tracer":       "callTracer",
-		"tracerConfig": map[string]interface{}{"withLog": true},
+		"tracerConfig": map[string]any{"withLog": true},
 	}
 
 	err := w.GethInstance.RPCClient.CallContext(ctx, &trace, "debug_traceTransaction", txHash.Hex(), tracerOptions)
@@ -1417,7 +2062,6 @@ func theTraceShouldBeEmpty(ctx context.Context) error {
 
 	t := trace{}
 
-	fmt.Println(string(w.LastTrace))
 	err := json.Unmarshal(w.LastTrace, &t)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal trace: %w", err)
@@ -1778,6 +2422,348 @@ func theErrorShouldMentionTheFirstValidationErrorEncountered(ctx context.Context
 	// The first validation error should be about BTL being 0
 	if !strings.Contains(w.ValidationError.Error(), "BTL is 0") {
 		return fmt.Errorf("expected first error to be about BTL, but got: %v", w.ValidationError)
+	}
+	return nil
+}
+
+func iSubmitAStorageTransactionWithNoPlayload(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	_, err := w.SendTxWithData(
+		ctx,
+		big.NewInt(1),
+		address.GolemBaseStorageProcessorAddress,
+		nil,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to transfer: %w", err)
+	}
+	return nil
+}
+
+func iSubmitAStorageTransactionWithUnparseableData(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	_, err := w.SendTxWithData(
+		ctx,
+		big.NewInt(1),
+		address.GolemBaseStorageProcessorAddress,
+		[]byte("unparseable data"),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to transfer: %w", err)
+	}
+	return nil
+}
+
+func theEntityUpdateLogShouldBeRecorded(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	receipt := w.LastReceipt
+
+	if len(receipt.Logs) == 0 {
+		return fmt.Errorf("no logs found in receipt")
+	}
+
+	logs := receipt.Logs
+
+	if len(logs) != 2 {
+		return fmt.Errorf("expected 2 logs, got %d", len(logs))
+	}
+
+	oldLog := logs[0]
+
+	if oldLog.Topics[0] != storagetx.GolemBaseStorageEntityUpdated {
+		return fmt.Errorf("expected GolemBaseStorageEntityUpdated log, got %s", oldLog.Topics[0])
+	}
+
+	oldLogData := oldLog.Data
+
+	if len(oldLogData) != 32 {
+		return fmt.Errorf("expected old log data to be 32 bytes, got %d", len(oldLogData))
+	}
+
+	oldExpiresAtBlock := uint256.NewInt(0).SetBytes(oldLogData).Uint64()
+
+	expiresAtBlockExpected := receipt.BlockNumber.Uint64() + 100
+
+	if oldExpiresAtBlock != expiresAtBlockExpected {
+		return fmt.Errorf("expected old expires at block to be %d, got %d", expiresAtBlockExpected, oldExpiresAtBlock)
+	}
+
+	newLog := logs[1]
+
+	if newLog.Topics[0] != arkivlogs.ArkivEntityUpdated {
+		return fmt.Errorf("expected ArkivEntityUpdated log, got %s", newLog.Topics[0])
+	}
+
+	newLogData := newLog.Data
+
+	if len(newLogData) != 96 {
+		return fmt.Errorf("expected new log data to be 64 bytes, got %d", len(newLogData))
+	}
+
+	oldEntityExpiresAtBlock := uint256.NewInt(0).SetBytes(newLogData[:32]).Uint64()
+
+	if oldEntityExpiresAtBlock != (expiresAtBlockExpected - 1) {
+		return fmt.Errorf("expected old entity expires at block to be %d, got %d", expiresAtBlockExpected-1, oldExpiresAtBlock)
+	}
+
+	newExpiresAtBlockU256 := uint256.NewInt(0).SetBytes(newLogData[32:64])
+	newExpiresAtBlock := newExpiresAtBlockU256.Uint64()
+
+	if newExpiresAtBlock != expiresAtBlockExpected {
+		return fmt.Errorf("expected new expires at block to be %d, got %d", expiresAtBlockExpected, newExpiresAtBlock)
+	}
+
+	owner := hashToAddress(newLog.Topics[2])
+
+	if owner != w.FundedAccount.Address {
+		return fmt.Errorf("expected owner to be %s, got %s", w.FundedAccount.Address.Hex(), owner.Hex())
+	}
+
+	return nil
+}
+
+func theEntityDeleteLogShouldBeRecorded(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	receipt := w.LastReceipt
+
+	if len(receipt.Logs) == 0 {
+		return fmt.Errorf("no logs found in receipt")
+	}
+
+	if len(receipt.Logs) != 2 {
+		return fmt.Errorf("expected 2 logs, got %d", len(receipt.Logs))
+	}
+
+	oldLog := receipt.Logs[0]
+
+	if oldLog.Topics[0] != storagetx.GolemBaseStorageEntityDeleted {
+		return fmt.Errorf("expected GolemBaseStorageEntityDeleted log, got %s", oldLog.Topics[0])
+	}
+
+	newLog := receipt.Logs[1]
+
+	if newLog.Topics[0] != arkivlogs.ArkivEntityDeleted {
+		return fmt.Errorf("expected ArkivEntityDeleted log, got %s", newLog.Topics[0])
+	}
+
+	if len(newLog.Topics) != 3 {
+		return fmt.Errorf("expected 3 topics, got %d", len(newLog.Topics))
+	}
+
+	if newLog.Topics[1] != w.CreatedEntityKey {
+		return fmt.Errorf("expected arkiv entity deleted entity key to be %s, got %s", w.CreatedEntityKey.Hex(), newLog.Topics[1])
+	}
+
+	owner := hashToAddress(newLog.Topics[2])
+
+	if owner != w.FundedAccount.Address {
+		return fmt.Errorf("expected owner to be %s, got %s", w.FundedAccount.Address.Hex(), owner.Hex())
+	}
+
+	return nil
+}
+
+func theEntityExtendLogShouldBeRecorded(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	receipt := w.LastReceipt
+
+	if len(receipt.Logs) == 0 {
+		return fmt.Errorf("no logs found in receipt")
+	}
+
+	if len(receipt.Logs) != 2 {
+		return fmt.Errorf("expected 2 logs, got %d", len(receipt.Logs))
+	}
+
+	oldLog := receipt.Logs[0]
+
+	if oldLog.Topics[0] != storagetx.GolemBaseStorageEntityBTLExtended {
+		return fmt.Errorf("expected GolemBaseStorageEntityBTLExtended log, got %s", oldLog.Topics[0])
+	}
+
+	{
+		oldLogData := oldLog.Data
+		if len(oldLogData) != 64 {
+			return fmt.Errorf("expected old log data to be 64 bytes, got %d", len(oldLogData))
+		}
+		oldExpiresAtBlock := uint256.NewInt(0).SetBytes(oldLogData[:32]).Uint64()
+		if oldExpiresAtBlock != (receipt.BlockNumber.Uint64() + 100 - 1) {
+			return fmt.Errorf("expected old entity expires at block to be %d, got %d", receipt.BlockNumber.Uint64()+100-1, oldExpiresAtBlock)
+		}
+		newExpiresAtBlock := uint256.NewInt(0).SetBytes(oldLogData[32:64]).Uint64()
+		if newExpiresAtBlock != (receipt.BlockNumber.Uint64() + 200 - 1) {
+			return fmt.Errorf("expected new entity expires at block to be %d, got %d", receipt.BlockNumber.Uint64()+200-1, newExpiresAtBlock)
+		}
+	}
+
+	newLog := receipt.Logs[1]
+
+	if newLog.Topics[0] != arkivlogs.ArkivEntityBTLExtended {
+		return fmt.Errorf("expected ArkivEntityBTLExtended log, got %s", newLog.Topics[0])
+	}
+
+	if len(newLog.Topics) != 3 {
+		return fmt.Errorf("expected 3 topics, got %d", len(newLog.Topics))
+	}
+
+	if newLog.Topics[1] != w.CreatedEntityKey {
+		return fmt.Errorf("expected arkiv entity extended entity key to be %s, got %s", w.CreatedEntityKey.Hex(), newLog.Topics[1])
+	}
+
+	owner := hashToAddress(newLog.Topics[2])
+
+	if owner != w.FundedAccount.Address {
+		return fmt.Errorf("expected owner to be %s, got %s", w.FundedAccount.Address.Hex(), owner.Hex())
+	}
+	{
+		newLogData := newLog.Data
+		if len(newLogData) != 96 {
+			return fmt.Errorf("expected new log data to be 96 bytes, got %d", len(newLogData))
+		}
+		oldExpiresAtBlock := uint256.NewInt(0).SetBytes(newLogData[:32]).Uint64()
+		if oldExpiresAtBlock != (receipt.BlockNumber.Uint64() + 100 - 1) {
+			return fmt.Errorf("expected old entity expires at block to be %d, got %d", receipt.BlockNumber.Uint64()+100-1, oldExpiresAtBlock)
+		}
+		newExpiresAtBlock := uint256.NewInt(0).SetBytes(newLogData[32:64]).Uint64()
+		if newExpiresAtBlock != (receipt.BlockNumber.Uint64() + 200 - 1) {
+			return fmt.Errorf("expected new entity expires at block to be %d, got %d", receipt.BlockNumber.Uint64()+200-1, newExpiresAtBlock)
+		}
+	}
+
+	return nil
+}
+
+func iSubmitATransactionToChangeTheOwnerOfTheEntity(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+
+	tx := &storagetx.ArkivTransaction{
+		ChangeOwner: []storagetx.ArkivChangeOwner{
+			{
+				EntityKey: w.CreatedEntityKey,
+				NewOwner:  common.HexToAddress("0x1234567890123456789012345678901234567890"),
+			},
+		},
+	}
+
+	txData, err := rlp.EncodeToBytes(tx)
+	if err != nil {
+		return fmt.Errorf("failed to encode transaction: %w", err)
+	}
+
+	_, err = w.SendTxWithData(
+		ctx,
+		big.NewInt(1),
+		address.ArkivProcessorAddress,
+		encoder.EncodeAll(txData, nil),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to send transaction: %w", err)
+	}
+	return nil
+}
+
+func theEntityOwnerChangeLogShouldBeRecorded(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	receipt := w.LastReceipt
+
+	if len(receipt.Logs) == 0 {
+		return fmt.Errorf("no logs found in receipt")
+	}
+
+	if len(receipt.Logs) != 1 {
+		return fmt.Errorf("expected 2 logs, got %d", len(receipt.Logs))
+	}
+
+	log := receipt.Logs[0]
+
+	if log.Topics[0] != arkivlogs.ArkivEntityOwnerChanged {
+		return fmt.Errorf("expected ArkivEntityOwnerChanged log, got %s", log.Topics[0].Hex())
+	}
+
+	if len(log.Topics) != 4 {
+		return fmt.Errorf("expected 4 topics, got %d", len(log.Topics))
+	}
+
+	if log.Topics[1] != w.CreatedEntityKey {
+		return fmt.Errorf("expected arkiv entity owner changed entity key to be %s, got %s", w.CreatedEntityKey.Hex(), log.Topics[1])
+	}
+
+	oldOwner := hashToAddress(log.Topics[2])
+
+	if oldOwner != w.FundedAccount.Address {
+		return fmt.Errorf("expected old owner to be %s, got %s", w.FundedAccount.Address.Hex(), oldOwner.Hex())
+	}
+
+	newOwner := hashToAddress(log.Topics[3])
+
+	if newOwner != common.HexToAddress("0x1234567890123456789012345678901234567890") {
+		return fmt.Errorf("expected new owner to be %s, got %s", common.HexToAddress("0x1234567890123456789012345678901234567890").Hex(), newOwner.Hex())
+	}
+
+	return nil
+}
+
+func theOwnerOfTheEntityShouldBeChanged(ctx context.Context) error {
+
+	w := testutil.GetWorld(ctx)
+	rcpClient := w.GethInstance.RPCClient
+
+	key := w.CreatedEntityKey
+
+	var e arkivtype.QueryResponse
+	err := rcpClient.CallContext(
+		ctx,
+		&e,
+		"arkiv_query",
+		fmt.Sprintf(`$key = %s`, key.Hex()),
+		struct{}{},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to get storage value: %w", err)
+	}
+
+	ed := arkivtype.EntityData{}
+
+	err = json.Unmarshal(e.Data[0], &ed)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal entity data: %w", err)
+	}
+
+	if string(ed.Value) != "test payload" {
+		return fmt.Errorf("unexpected storage value: %s", string(ed.Value))
+	}
+
+	newOwner := ed.Owner
+
+	if *newOwner != common.HexToAddress("0x1234567890123456789012345678901234567890") {
+		return fmt.Errorf("expected new owner to be %s, got %s", common.HexToAddress("0x1234567890123456789012345678901234567890").Hex(), newOwner.Hex())
+	}
+
+	return nil
+}
+
+func iSubmitATransactionToChangeTheOwnerOfTheEntityByNonowner(ctx context.Context) error {
+	w := testutil.GetWorld(ctx)
+	tx := &storagetx.ArkivTransaction{
+		ChangeOwner: []storagetx.ArkivChangeOwner{
+			{
+				EntityKey: w.CreatedEntityKey,
+				NewOwner:  common.HexToAddress("0x1234567890123456789012345678901234567890"),
+			},
+		},
+	}
+	txData, err := rlp.EncodeToBytes(tx)
+	if err != nil {
+		return fmt.Errorf("failed to encode transaction: %w", err)
+	}
+	_, err = w.SendTxFromSecondAccountWithData(
+		ctx,
+		big.NewInt(0),
+		address.ArkivProcessorAddress,
+		encoder.EncodeAll(txData, nil),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to send transaction: %w", err)
 	}
 	return nil
 }

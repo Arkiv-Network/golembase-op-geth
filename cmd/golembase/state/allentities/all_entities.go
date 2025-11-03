@@ -8,7 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/golem-base/storageutil"
+	"github.com/ethereum/go-ethereum/golem-base/address"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/entity/allentities"
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/keyset"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -59,7 +59,7 @@ func AllEntities() *cli.Command {
 				block = hexutil.Uint64(cfg.block)
 			}
 
-			err = rpcClient.CallContext(ctx, &res, "eth_getStorageAt", storageutil.GolemDBAddress, firstSlot, block)
+			err = rpcClient.CallContext(ctx, &res, "eth_getStorageAt", address.ArkivProcessorAddress, firstSlot, block)
 			if err != nil {
 				return fmt.Errorf("failed to get storage at: %w", err)
 			}
@@ -77,7 +77,7 @@ func AllEntities() *cli.Command {
 
 				currentSlotHash := common.Hash(curentSlot.Bytes32())
 
-				err = rpcClient.CallContext(ctx, &res, "eth_getStorageAt", storageutil.GolemDBAddress, currentSlotHash, block)
+				err = rpcClient.CallContext(ctx, &res, "eth_getStorageAt", address.ArkivProcessorAddress, currentSlotHash, block)
 				if err != nil {
 					return fmt.Errorf("failed to get storage at: %w", err)
 				}
@@ -85,7 +85,7 @@ func AllEntities() *cli.Command {
 
 				mappingSlot := crypto.Keccak256Hash(keyset.MapKeyPrefix, allentities.AllEntitiesKey[:], res[:])
 
-				err = rpcClient.CallContext(ctx, &res, "eth_getStorageAt", storageutil.GolemDBAddress, mappingSlot, block)
+				err = rpcClient.CallContext(ctx, &res, "eth_getStorageAt", address.ArkivProcessorAddress, mappingSlot, block)
 				if err != nil {
 					return fmt.Errorf("failed to get storage at: %w", err)
 				}

@@ -229,7 +229,12 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 // state and would never be accepted within a block.
 func ApplyMessage(evm *vm.EVM, msg *Message, gp *GasPool) (*ExecutionResult, error) {
 	evm.SetTxContext(NewEVMTxContext(msg))
-	return newStateTransition(evm, msg, gp).execute()
+	return newStateTransition(evm, msg, gp, 0).execute()
+}
+
+func ApplyMessageWithIndex(evm *vm.EVM, msg *Message, gp *GasPool, txIndex int) (*ExecutionResult, error) {
+	evm.SetTxContext(NewEVMTxContext(msg))
+	return newStateTransition(evm, msg, gp, txIndex).execute()
 }
 
 // stateTransition represents a state transition.
@@ -261,15 +266,17 @@ type stateTransition struct {
 	initialGas   uint64
 	state        vm.StateDB
 	evm          *vm.EVM
+	txIndex      int
 }
 
 // newStateTransition initialises and returns a new state transition object.
-func newStateTransition(evm *vm.EVM, msg *Message, gp *GasPool) *stateTransition {
+func newStateTransition(evm *vm.EVM, msg *Message, gp *GasPool, txIndex int) *stateTransition {
 	return &stateTransition{
-		gp:    gp,
-		evm:   evm,
-		msg:   msg,
-		state: evm.StateDB,
+		gp:      gp,
+		evm:     evm,
+		msg:     msg,
+		state:   evm.StateDB,
+		txIndex: txIndex,
 	}
 }
 
@@ -612,19 +619,35 @@ func (st *stateTransition) innerExecute() (*ExecutionResult, error) {
 		case st.to() == address.GolemBaseStorageProcessorAddress:
 			st.evm.Context.Transfer(st.evm.StateDB, msg.From, st.to(), value)
 
-			if len(st.msg.Data) > 0 {
-				var logs []*types.Log
-				// run the storage transaction
-				logs, vmerr = storagetx.ExecuteTransaction(st.msg.Data, st.msg.BlockNumber, st.msg.TransactionHash, msg.From, st.evm.StateDB)
-				if err != nil {
-					return nil, fmt.Errorf("failed to execute storage transaction: %w", err)
-				}
+			var logs []*types.Log
+			// run the storage transaction
+			// We set the tx index to 0, since it doesn't matter because this execution won't modify the account state
+			logs, vmerr = storagetx.ExecuteTransaction(st.msg.Data, st.msg.BlockNumber, st.msg.TransactionHash, st.txIndex, msg.From, st.evm.StateDB)
+			if err != nil {
+				return nil, fmt.Errorf("failed to execute storage transaction: %w", err)
+			}
 
-				if vmerr == nil {
-					// add logs of the storage transaction
-					for _, log := range logs {
-						st.evm.StateDB.AddLog(log)
-					}
+			if vmerr == nil {
+				// add logs of the storage transaction
+				for _, log := range logs {
+					st.evm.StateDB.AddLog(log)
+				}
+			}
+		case st.to() == address.ArkivProcessorAddress:
+			st.evm.Context.Transfer(st.evm.StateDB, msg.From, st.to(), value)
+
+			var logs []*types.Log
+			// run the arkiv transaction
+			// We set the tx index to 0, since it doesn't matter because this execution won't modify the account state
+			logs, vmerr = storagetx.ExecuteArkivTransaction(st.msg.Data, st.msg.BlockNumber, st.msg.TransactionHash, st.txIndex, msg.From, st.evm.StateDB)
+			if err != nil {
+				return nil, fmt.Errorf("failed to execute arkiv transaction: %w", err)
+			}
+
+			if vmerr == nil {
+				// add logs of the arkiv transaction
+				for _, log := range logs {
+					st.evm.StateDB.AddLog(log)
 				}
 			}
 		case msg.IsDepositTx:

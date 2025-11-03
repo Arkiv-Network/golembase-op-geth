@@ -12,7 +12,7 @@ import (
 
 type StateAccess = storageutil.StateAccess
 
-var BlockExpirationSalt = []byte("golemBaseExpiresAtBlock")
+var BlockExpirationSalt = []byte("arkivExpiresAtBlock")
 
 func AddToEntitiesToExpireAtBlock(access StateAccess, blockNumber uint64, entityKey common.Hash) error {
 	expiresAtBlockNumberBig := uint256.NewInt(blockNumber)

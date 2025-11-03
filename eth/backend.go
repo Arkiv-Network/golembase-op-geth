@@ -278,6 +278,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	st, err := sqlstore.NewStore(
 		stack.Config().GolemBaseSQLStateFile,
+		stack.Config().ArkivHistoricBlocksFlag,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SQLStore: %w", err)
@@ -427,6 +428,12 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		{
 			Namespace: "golembase",
 			Service:   NewGolemBaseAPI(eth, st),
+		},
+	})
+	stack.RegisterAPIs([]rpc.API{
+		{
+			Namespace: "arkiv",
+			Service:   NewArkivAPI(eth, st),
 		},
 	})
 	stack.RegisterAPIs(eth.APIs())

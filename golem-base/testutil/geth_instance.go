@@ -60,7 +60,7 @@ func startGethInstance(ctx context.Context, gethPath string, tempDir string) (_ 
 		"--http",           // Enable the HTTP-RPC server
 		"--ipcdisable",     // Disable ipc, to avoid concurrency issues (using the same socket path)
 		"--http.port", "0", // Use random port
-		"--http.api", "eth,web3,net,debug,golembase", // Enable necessary APIs
+		"--http.api", "eth,web3,net,debug,arkiv,golembase", // Enable necessary APIs
 		"--verbosity", "3", // Increase logging to see HTTP endpoint
 		"--golembase.sqlstatefile", filepath.Join(tempDir, "golem-base.db"),
 	)

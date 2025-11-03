@@ -6,9 +6,10 @@ import (
 	"github.com/ethereum/go-ethereum/golem-base/storageutil/stateblob"
 )
 
-var PayloadSalt = []byte("golemBasePayload")
+var PayloadSalt = []byte("arkivPayload")
 
 func StorePayload(access StateAccess, key common.Hash, payload []byte) {
+	compressed := encoder.EncodeAll(payload, nil)
 	hash := crypto.Keccak256Hash(PayloadSalt, key[:])
-	stateblob.SetBlob(access, hash, payload)
+	stateblob.SetBlob(access, hash, compressed)
 }
